@@ -10,7 +10,7 @@ Besides we also support metrics report without deploying new components.
 To schedule a GPU payload correctly, GPU manager should work with `gpu-quota-admission` which is a kubernetes scheduler plugin.
 
 GPU manager also supports the payload with fraction resource of GPU device such as 0.1 card or 100MiB gpu device memory.
-If you want this kind feature, please refer to `vcuda` project.
+If you want this kind feature, please refer to [vcuda-controller](https://github.com/tkestack/vcuda-controller) project.
 
 # How to deploy GPU Manager
 
