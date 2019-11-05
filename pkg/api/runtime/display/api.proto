@@ -1,0 +1,67 @@
+syntax = 'proto3';
+
+package display;
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+
+// GPUDisplay service defines the aux APIs for remote request
+service GPUDisplay {
+  // PrintGraph returns the text graph of allocator state
+  rpc PrintGraph(google.protobuf.Empty) returns (GraphResponse) {
+    option (google.api.http) = {
+      get: "/graph"
+    };
+  }
+
+  // GPU usages
+  rpc PrintUsages(google.protobuf.Empty) returns (UsageResponse) {
+    option (google.api.http) = {
+      get: "/usage"
+    };
+  }
+
+  // Version
+  rpc Version(google.protobuf.Empty) returns (VersionResponse) {
+    option (google.api.http) = {
+      get: "/version"
+    };
+  }
+}
+
+message GraphResponse {
+  string graph = 1;
+}
+
+message UsageResponse {
+  map<string, ContainerStat> usage = 1;
+}
+
+message ContainerStat {
+  map<string, Devices> stat = 1;
+  string project = 2;
+  string user = 3;
+  string cluster = 4;
+  map<string, Spec> spec = 5;
+}
+
+message Devices {
+    repeated DeviceInfo dev = 1;
+}
+
+message DeviceInfo {
+  string id = 1;
+  string card_idx = 2;
+  float gpu = 10;
+  float mem = 11;
+  repeated int32 pids = 12;
+}
+
+message VersionResponse {
+  string version = 1;
+}
+
+message Spec {
+    float gpu = 1;
+    float mem = 2;
+}

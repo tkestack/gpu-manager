@@ -1,0 +1,16 @@
+syntax = 'proto3';
+
+package vcuda;
+
+service VCUDAService {
+  rpc RegisterVDevice(VDeviceRequest) returns (VDeviceResponse) {}
+}
+
+message VDeviceRequest {
+    string bus_id = 1;
+    string pod_uid = 2;
+    string container_name = 3;
+    string container_id = 4;
+}
+
+message VDeviceResponse {}
