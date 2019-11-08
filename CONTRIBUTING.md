@@ -1,6 +1,6 @@
 # CONTRIBUTING
 
-Welcome to [report Issues](https://github.com/tkestack/toc/issues) or [pull requests](https://github.com/tkestack/toc/pulls). It's recommended to read the following Contributing Guide first before contributing.
+Welcome to [report Issues](https://github.com/tkestack/gpu-manager/issues) or [pull requests](https://github.com/tkestack/gpu-manager/pulls). It's recommended to read the following Contributing Guide first before contributing.
 
 This document provides a set of best practices for open source contributions - bug reports, code submissions / pull requests, etc.
 
