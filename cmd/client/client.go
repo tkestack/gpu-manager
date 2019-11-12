@@ -21,10 +21,10 @@ import (
 	"context"
 	goflag "flag"
 
-	vcudaapi "tkestack.io/tkestack/gpu-manager/pkg/api/runtime/vcuda"
-	"tkestack.io/tkestack/gpu-manager/pkg/flags"
-	"tkestack.io/tkestack/gpu-manager/pkg/logs"
-	"tkestack.io/tkestack/gpu-manager/pkg/utils"
+	vcudaapi "tkestack.io/gpu-manager/pkg/api/runtime/vcuda"
+	"tkestack.io/gpu-manager/pkg/flags"
+	"tkestack.io/gpu-manager/pkg/logs"
+	"tkestack.io/gpu-manager/pkg/utils"
 
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
@@ -55,7 +55,7 @@ func main() {
 
 	conn, err := grpc.Dial(addr, utils.DefaultDialOptions...)
 	if err != nil {
-		glog.Fatalf("can't dial %s, error", addr, err)
+		glog.Fatalf("can't dial %s, error %v", addr, err)
 	}
 	defer conn.Close()
 

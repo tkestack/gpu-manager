@@ -18,8 +18,8 @@
 package allocator
 
 import (
-	"tkestack.io/tkestack/gpu-manager/pkg/config"
-	"tkestack.io/tkestack/gpu-manager/pkg/device"
+	"tkestack.io/gpu-manager/pkg/config"
+	"tkestack.io/gpu-manager/pkg/device"
 
 	"github.com/golang/glog"
 	"k8s.io/client-go/kubernetes"

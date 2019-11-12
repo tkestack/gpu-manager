@@ -24,11 +24,11 @@ import (
 	"strings"
 	"time"
 
-	"tkestack.io/tkestack/gpu-manager/cmd/manager/options"
-	"tkestack.io/tkestack/gpu-manager/pkg/config"
-	"tkestack.io/tkestack/gpu-manager/pkg/server"
-	"tkestack.io/tkestack/gpu-manager/pkg/types"
-	"tkestack.io/tkestack/gpu-manager/pkg/utils"
+	"tkestack.io/gpu-manager/cmd/manager/options"
+	"tkestack.io/gpu-manager/pkg/config"
+	"tkestack.io/gpu-manager/pkg/server"
+	"tkestack.io/gpu-manager/pkg/types"
+	"tkestack.io/gpu-manager/pkg/utils"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"

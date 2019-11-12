@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"time"
 
-	"tkestack.io/tkestack/gpu-manager/pkg/config"
-	"tkestack.io/tkestack/gpu-manager/pkg/device"
+	"tkestack.io/gpu-manager/pkg/config"
+	"tkestack.io/gpu-manager/pkg/device"
 	// Register test allocator controller
-	_ "tkestack.io/tkestack/gpu-manager/pkg/device/dummy"
-	"tkestack.io/tkestack/gpu-manager/pkg/services/allocator"
+	_ "tkestack.io/gpu-manager/pkg/device/dummy"
+	"tkestack.io/gpu-manager/pkg/services/allocator"
 
 	"github.com/golang/glog"
 	"k8s.io/client-go/kubernetes"

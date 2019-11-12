@@ -33,8 +33,8 @@ import (
 	"strings"
 	"time"
 
-	nvtree "tkestack.io/tkestack/gpu-manager/pkg/device/nvidia"
-	"tkestack.io/tkestack/gpu-manager/pkg/types"
+	nvtree "tkestack.io/gpu-manager/pkg/device/nvidia"
+	"tkestack.io/gpu-manager/pkg/types"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"

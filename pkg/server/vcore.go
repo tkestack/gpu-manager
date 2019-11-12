@@ -27,7 +27,7 @@ import (
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
-	"tkestack.io/tkestack/gpu-manager/pkg/types"
+	"tkestack.io/gpu-manager/pkg/types"
 )
 
 const (

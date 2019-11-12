@@ -18,7 +18,7 @@
 package device
 
 import (
-	"tkestack.io/tkestack/gpu-manager/pkg/config"
+	"tkestack.io/gpu-manager/pkg/config"
 
 	"github.com/golang/glog"
 )

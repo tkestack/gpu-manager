@@ -20,7 +20,7 @@ package nvidia
 import (
 	"strings"
 
-	"tkestack.io/tkestack/nvml"
+	"tkestack.io/nvml"
 )
 
 func parseToGpuTopologyLevel(str string) nvml.GpuTopologyLevel {

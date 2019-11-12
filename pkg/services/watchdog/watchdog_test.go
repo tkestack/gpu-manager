@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"tkestack.io/tkestack/gpu-manager/pkg/types"
+	"tkestack.io/gpu-manager/pkg/types"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -64,7 +64,7 @@ func TestWatchdog(t *testing.T) {
 		}},
 		Status: v1.PodStatus{Phase: v1.PodRunning},
 	}
-	k8sclient.Core().Pods(ns).Create(pod)
+	k8sclient.CoreV1().Pods(ns).Create(pod)
 
 	// create watchdog and run
 	NewPodCacheForTest(k8sclient)

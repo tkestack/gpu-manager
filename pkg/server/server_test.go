@@ -31,15 +31,15 @@ import (
 	"testing"
 	"time"
 
-	"tkestack.io/tkestack/gpu-manager/cmd/manager/options"
-	"tkestack.io/tkestack/gpu-manager/pkg/config"
-	deviceFactory "tkestack.io/tkestack/gpu-manager/pkg/device"
-	"tkestack.io/tkestack/gpu-manager/pkg/device/nvidia"
-	allocFactory "tkestack.io/tkestack/gpu-manager/pkg/services/allocator"
-	virtual_manager "tkestack.io/tkestack/gpu-manager/pkg/services/virtual-manager"
-	"tkestack.io/tkestack/gpu-manager/pkg/services/watchdog"
-	"tkestack.io/tkestack/gpu-manager/pkg/types"
-	"tkestack.io/tkestack/gpu-manager/pkg/utils"
+	"tkestack.io/gpu-manager/cmd/manager/options"
+	"tkestack.io/gpu-manager/pkg/config"
+	deviceFactory "tkestack.io/gpu-manager/pkg/device"
+	"tkestack.io/gpu-manager/pkg/device/nvidia"
+	allocFactory "tkestack.io/gpu-manager/pkg/services/allocator"
+	virtual_manager "tkestack.io/gpu-manager/pkg/services/virtual-manager"
+	"tkestack.io/gpu-manager/pkg/services/watchdog"
+	"tkestack.io/gpu-manager/pkg/types"
+	"tkestack.io/gpu-manager/pkg/utils"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -117,6 +117,7 @@ func stopServer(srv *managerImpl) {
 }
 
 func TestServer(t *testing.T) {
+	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	tempDir, _ := ioutil.TempDir("", "gpu-manager")
 
@@ -262,7 +263,7 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 		for i := range pod.Spec.Containers {
 			pod.Annotations[types.PredicateGPUIndexPrefix+strconv.Itoa(i)] = "0"
 		}
-		pod, _ = k8sClient.Core().Pods("test-ns").Create(pod)
+		pod, _ = k8sClient.CoreV1().Pods("test-ns").Create(pod)
 
 		// wait for podLister to sync
 		time.Sleep(time.Second * 2)

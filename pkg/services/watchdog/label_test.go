@@ -49,15 +49,15 @@ func TestNodeLabeler(t *testing.T) {
 			Labels: make(map[string]string),
 		},
 	}
-	k8sclient.Core().Nodes().Create(node)
+	k8sclient.CoreV1().Nodes().Create(node)
 
 	// create nodeLabeler and run
-	nodeLabeler := NewNodeLabeler(k8sclient.Core(), nodeName, labels)
+	nodeLabeler := NewNodeLabeler(k8sclient.CoreV1(), nodeName, labels)
 	go nodeLabeler.Run()
 
 	// check if nodeLabeler work well
 	err := wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
-		node, err := k8sclient.Core().Nodes().Get(nodeName, metav1.GetOptions{})
+		node, err := k8sclient.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
