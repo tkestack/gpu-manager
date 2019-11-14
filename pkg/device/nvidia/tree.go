@@ -26,11 +26,11 @@ import (
 	"sync"
 	"time"
 
-	"tkestack.io/tkestack/gpu-manager/pkg/config"
-	"tkestack.io/tkestack/gpu-manager/pkg/device"
+	"tkestack.io/gpu-manager/pkg/config"
+	"tkestack.io/gpu-manager/pkg/device"
 
 	"github.com/golang/glog"
-	"tkestack.io/tkestack/nvml"
+	"tkestack.io/nvml"
 )
 
 const (

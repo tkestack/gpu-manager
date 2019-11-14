@@ -30,12 +30,12 @@ import (
 	"time"
 	"unsafe"
 
-	vcudaapi "tkestack.io/tkestack/gpu-manager/pkg/api/runtime/vcuda"
-	"tkestack.io/tkestack/gpu-manager/pkg/config"
-	"tkestack.io/tkestack/gpu-manager/pkg/device/nvidia"
-	"tkestack.io/tkestack/gpu-manager/pkg/services/watchdog"
-	"tkestack.io/tkestack/gpu-manager/pkg/types"
-	"tkestack.io/tkestack/gpu-manager/pkg/utils"
+	vcudaapi "tkestack.io/gpu-manager/pkg/api/runtime/vcuda"
+	"tkestack.io/gpu-manager/pkg/config"
+	"tkestack.io/gpu-manager/pkg/device/nvidia"
+	"tkestack.io/gpu-manager/pkg/services/watchdog"
+	"tkestack.io/gpu-manager/pkg/types"
+	"tkestack.io/gpu-manager/pkg/utils"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"

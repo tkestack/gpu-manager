@@ -26,21 +26,21 @@ import (
 	"sync"
 	"time"
 
-	displayapi "tkestack.io/tkestack/gpu-manager/pkg/api/runtime/display"
-	"tkestack.io/tkestack/gpu-manager/pkg/config"
-	"tkestack.io/tkestack/gpu-manager/pkg/device"
-	nvtree "tkestack.io/tkestack/gpu-manager/pkg/device/nvidia"
-	"tkestack.io/tkestack/gpu-manager/pkg/services/watchdog"
-	"tkestack.io/tkestack/gpu-manager/pkg/types"
-	"tkestack.io/tkestack/gpu-manager/pkg/utils"
-	"tkestack.io/tkestack/gpu-manager/pkg/version"
+	displayapi "tkestack.io/gpu-manager/pkg/api/runtime/display"
+	"tkestack.io/gpu-manager/pkg/config"
+	"tkestack.io/gpu-manager/pkg/device"
+	nvtree "tkestack.io/gpu-manager/pkg/device/nvidia"
+	"tkestack.io/gpu-manager/pkg/services/watchdog"
+	"tkestack.io/gpu-manager/pkg/types"
+	"tkestack.io/gpu-manager/pkg/utils"
+	"tkestack.io/gpu-manager/pkg/version"
 
 	"github.com/golang/glog"
 	google_protobuf1 "github.com/golang/protobuf/ptypes/empty"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/api/core/v1"
 	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
-	"tkestack.io/tkestack/nvml"
+	"tkestack.io/nvml"
 )
 
 //Display is used to show GPU device usage

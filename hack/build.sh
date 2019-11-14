@@ -10,7 +10,6 @@ source "${ROOT}/hack/common.sh"
 
 function plugin::build() {
   (
-    plugin::setup_env
     for arg; do
         case $arg in
         test)
@@ -32,31 +31,18 @@ function plugin::build() {
   )
 }
 
-function plugin::test_package() {
-  (
-    cd "$GOPATH/src/$PACKAGE"
-    subpackage=$(find . -not \( \( -wholename '*/vendor/*' \) -prune \) -name '*_test.go' -print|sed 's,./,,'|xargs -n1 dirname|sort -u)
-    echo "$subpackage"
-  )
-}
-
 function plugin::run_test() {
-  local log=$(mktemp)
-  echo "run test, log in $log"
-  for p in $(plugin::test_package);do
-    go test -timeout=1m -bench=. -cover -v "$PACKAGE/$p" 2>&1|tee -a $log || (cat $log && exit 1)
-  done
-  rm -rf ${log}
+  go test -timeout=1m -bench=. -cover -v ./...
 }
 
 function plugin::build_binary() {
-  go build -o "${GOPATH}/bin/gpu-$arg" -ldflags "$(plugin::version::ldflags) -s -w" ${PACKAGE}/cmd/$arg
+  go build -o "${ROOT}/go/bin/gpu-$arg" -ldflags "$(plugin::version::ldflags) -s -w" ${PACKAGE}/cmd/$arg
 }
 
 function plugin::generate_img() {
   readonly local commit=$(git log --no-merges --oneline | wc -l | sed -e 's,^[ \t]*,,')
   readonly local version=$(<"${ROOT}/VERSION")
-  readonly local base_img=${BASE_IMG:-"tkestack.io/public/vcuda:latest"}
+  readonly local base_img=${BASE_IMG:-"centos:7"}
 
   mkdir -p "${ROOT}/go/build"
   tar czf "${ROOT}/go/build/gpu-manager-source.tar.gz" --transform 's,^,/gpu-manager-'${version}'/,' $(plugin::source_targets)

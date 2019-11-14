@@ -19,7 +19,7 @@ package register
 
 import (
 	// Register test device
-	_ "tkestack.io/tkestack/gpu-manager/pkg/device/dummy"
+	_ "tkestack.io/gpu-manager/pkg/device/dummy"
 	// Register nvidia device
-	_ "tkestack.io/tkestack/gpu-manager/pkg/device/nvidia"
+	_ "tkestack.io/gpu-manager/pkg/device/nvidia"
 )

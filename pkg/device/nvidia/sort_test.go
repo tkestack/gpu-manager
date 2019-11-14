@@ -21,7 +21,7 @@ import (
 	"flag"
 	"testing"
 
-	"tkestack.io/tkestack/gpu-manager/pkg/types"
+	"tkestack.io/gpu-manager/pkg/types"
 )
 
 func init() {
@@ -30,6 +30,7 @@ func init() {
 }
 
 func TestSort(t *testing.T) {
+	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	//init tree
 	obj := NewNvidiaTree(nil)

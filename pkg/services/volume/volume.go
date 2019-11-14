@@ -27,8 +27,8 @@ import (
 	"strconv"
 	"strings"
 
-	"tkestack.io/tkestack/gpu-manager/pkg/services/volume/ldcache"
-	"tkestack.io/tkestack/gpu-manager/pkg/types"
+	"tkestack.io/gpu-manager/pkg/services/volume/ldcache"
+	"tkestack.io/gpu-manager/pkg/types"
 
 	"github.com/golang/glog"
 )

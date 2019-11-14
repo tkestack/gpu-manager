@@ -23,7 +23,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"tkestack.io/tkestack/nvml"
+	"tkestack.io/nvml"
 )
 
 //SchedulerCache contains allocatable resource of GPU

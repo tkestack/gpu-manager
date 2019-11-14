@@ -20,7 +20,7 @@ package watchdog
 import (
 	"time"
 
-	"tkestack.io/tkestack/gpu-manager/pkg/utils"
+	"tkestack.io/gpu-manager/pkg/utils"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"

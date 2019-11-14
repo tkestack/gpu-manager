@@ -18,7 +18,7 @@
 package nvidia
 
 import (
-	node "tkestack.io/tkestack/gpu-manager/pkg/device/nvidia"
+	node "tkestack.io/gpu-manager/pkg/device/nvidia"
 )
 
 //Evaluator api for schedule algorithm

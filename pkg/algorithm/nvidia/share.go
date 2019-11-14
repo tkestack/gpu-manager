@@ -22,7 +22,7 @@ import (
 
 	"github.com/golang/glog"
 
-	"tkestack.io/tkestack/gpu-manager/pkg/device/nvidia"
+	"tkestack.io/gpu-manager/pkg/device/nvidia"
 )
 
 type shareMode struct {

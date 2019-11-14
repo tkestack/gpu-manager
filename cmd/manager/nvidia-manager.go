@@ -22,11 +22,11 @@ import (
 	"fmt"
 	"os"
 
-	"tkestack.io/tkestack/gpu-manager/cmd/manager/app"
-	"tkestack.io/tkestack/gpu-manager/cmd/manager/options"
-	"tkestack.io/tkestack/gpu-manager/pkg/flags"
-	"tkestack.io/tkestack/gpu-manager/pkg/logs"
-	"tkestack.io/tkestack/gpu-manager/pkg/version"
+	"tkestack.io/gpu-manager/cmd/manager/app"
+	"tkestack.io/gpu-manager/cmd/manager/options"
+	"tkestack.io/gpu-manager/pkg/flags"
+	"tkestack.io/gpu-manager/pkg/logs"
+	"tkestack.io/gpu-manager/pkg/version"
 
 	"github.com/spf13/pflag"
 )

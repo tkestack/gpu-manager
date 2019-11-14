@@ -21,7 +21,7 @@ import (
 	"flag"
 	"testing"
 
-	"tkestack.io/tkestack/gpu-manager/pkg/device/nvidia"
+	"tkestack.io/gpu-manager/pkg/device/nvidia"
 )
 
 func init() {
@@ -30,6 +30,7 @@ func init() {
 }
 
 func TestLink(t *testing.T) {
+	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	obj := nvidia.NewNvidiaTree(nil)
 	tree, _ := obj.(*nvidia.NvidiaTree)
