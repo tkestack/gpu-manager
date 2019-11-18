@@ -23,6 +23,11 @@ replace (
 	k8s.io/legacy-cloud-providers => github.com/kubernetes/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20190816231410-2d3c76f9091b
 	k8s.io/metrics => github.com/kubernetes/kubernetes/staging/src/k8s.io/metrics v0.0.0-20190816231410-2d3c76f9091b
 	k8s.io/sample-apiserver => github.com/kubernetes/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20190816231410-2d3c76f9091b
+	modernc.org/cc => github.com/cznic/cc v0.0.0-20181122101902-d673e9b70d4d
+	modernc.org/golex => github.com/cznic/golex v0.0.0-20181122101858-9c343928389c
+	modernc.org/mathutil => github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548
+	modernc.org/strutil => github.com/cznic/strutil v0.0.0-20181122101858-275e90344537
+	modernc.org/xc => github.com/cznic/xc v0.0.0-20181122101856-45b06973881e
 	tkestack.io/nvml => github.com/tkestack/go-nvml v0.0.0-20191112083529-e26e44cafb1c
 )
 
@@ -30,6 +35,7 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20180511133405-39ca1b05acc7
 	github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0
 	github.com/fsnotify/fsnotify v1.4.7
+	github.com/gogo/protobuf v1.1.1 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.3.2
 	github.com/grpc-ecosystem/grpc-gateway v1.12.1
