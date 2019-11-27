@@ -4,7 +4,11 @@ FROM nvidia/cuda:10.1-devel-centos7 as build
 ARG version
 ARG commit
 
-RUN yum install -y rpm-build make git
+RUN yum install -y rpm-build make
+
+# default git has problems while cloning some repository
+RUN yum install -y https://centos7.iuscommunity.org/ius-release.rpm \
+  && yum install -y git222
 
 ENV GOLANG_VERSION 1.12.4
 RUN curl -sSL https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz \
