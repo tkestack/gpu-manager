@@ -15,6 +15,7 @@ spec:
       labels:
         name: gpu-manager-ds
     spec:
+      serviceAccount: gpu-manager
       tolerations:
         # This toleration is deprecated. Kept here for backward compatibility
         # See https://kubernetes.io/docs/tasks/administer-cluster/guaranteed-scheduling-critical-addon-pods/
@@ -33,7 +34,7 @@ spec:
         nvidia-device-enable: enable
       hostPID: true
       containers:
-        - image: gpu-manager:latest
+        - image: tkestack/gpu-manager:1.0.3
           imagePullPolicy: Always
           name: gpu-manager
           securityContext:
@@ -62,7 +63,7 @@ spec:
             - name: LOG_LEVEL
               value: "4"
             - name: EXTRA_FLAGS
-              value: "--incluster-mode=false"
+              value: "--incluster-mode=true"
             - name: NODE_NAME
               valueFrom:
                 fieldRef:

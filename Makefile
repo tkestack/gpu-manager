@@ -6,11 +6,6 @@ all:
 clean:
 	rm -rf ./go
 
-.PHONY: vendor
-vendor:
-	rm -rf vendor
-	hack/glide.sh
-
 .PHONY: test
 test:
 	hack/build.sh "test"
