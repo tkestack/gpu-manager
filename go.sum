@@ -375,8 +375,8 @@ github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/syndtr/gocapability v0.0.0-20160928074757-e7cb7fa329f4 h1:w58e6FAOMd+rUgOfhaBb+ZVOQIOfUkpv5AAQVmf6hsI=
 github.com/syndtr/gocapability v0.0.0-20160928074757-e7cb7fa329f4/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
-github.com/tkestack/go-nvml v0.0.0-20191112083529-e26e44cafb1c h1:Ohc6O8CVw12KA1gQwwLNPZdgWgl3QgQLFRX0iLGiTjo=
-github.com/tkestack/go-nvml v0.0.0-20191112083529-e26e44cafb1c/go.mod h1:6U/NbUmn/gt/d6yR3Qd4Hc9Yu3qyyREnz6hiYz9/qws=
+github.com/tkestack/go-nvml v0.0.0-20191217064248-7363e630a33e h1:0+K32iJJnNaL/0QxJjfk33QiF+9b9yVkHkuXJWDQPfI=
+github.com/tkestack/go-nvml v0.0.0-20191217064248-7363e630a33e/go.mod h1:6U/NbUmn/gt/d6yR3Qd4Hc9Yu3qyyREnz6hiYz9/qws=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20170815181823-89b8d40f7ca8 h1:ndzgwNDnKIqyCvHTXaCqh9KlOWKvBry6nuXMJmonVsE=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20170815181823-89b8d40f7ca8/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/urfave/negroni v1.0.0/go.mod h1:Meg73S6kFm/4PpbYdq35yYWoCZ9mS/YSx+lKnmiohz4=
