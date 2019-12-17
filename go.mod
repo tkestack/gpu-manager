@@ -23,7 +23,7 @@ replace (
 	k8s.io/legacy-cloud-providers => github.com/kubernetes/kubernetes/staging/src/k8s.io/legacy-cloud-providers v0.0.0-20190816231410-2d3c76f9091b
 	k8s.io/metrics => github.com/kubernetes/kubernetes/staging/src/k8s.io/metrics v0.0.0-20190816231410-2d3c76f9091b
 	k8s.io/sample-apiserver => github.com/kubernetes/kubernetes/staging/src/k8s.io/sample-apiserver v0.0.0-20190816231410-2d3c76f9091b
-	tkestack.io/nvml => github.com/tkestack/go-nvml v0.0.0-20191112083529-e26e44cafb1c
+	tkestack.io/nvml => github.com/tkestack/go-nvml v0.0.0-20191217064248-7363e630a33e
 )
 
 require (
