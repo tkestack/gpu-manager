@@ -29,6 +29,10 @@ function copy_lib() {
 
 function copy_bin() {
   for target in $(find /usr -name "${1}"); do
+    if [[ -L ${target} ]]; then
+      echo ${target} " is symlink"
+      continue
+    fi
     copy_directory ${target} "${NV_DIR}/bin/"
   done
 }
