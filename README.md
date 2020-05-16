@@ -73,8 +73,8 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: vcuda
-  annotation:
-    tencent.com/vcuda-core-limit: 50
+  annotations:
+    tencent.com/vcuda-core-limit: "50"
 spec:
   restartPolicy: Never
   hostNetwork: true
