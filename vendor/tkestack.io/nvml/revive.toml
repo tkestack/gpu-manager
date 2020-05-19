@@ -1,0 +1,43 @@
+# When set to false, ignores files with "GENERATED" header, similar to golint
+ignoreGeneratedHeader = true
+severity = "warning"
+confidence = 0.8
+errorCode = 0
+warningCode = 0
+
+[rule.context-as-argument]
+[rule.context-keys-type]
+[rule.dot-imports]
+[rule.error-return]
+[rule.error-strings]
+[rule.error-naming]
+[rule.if-return]
+[rule.increment-decrement]
+[rule.var-declaration]
+[rule.package-comments]
+[rule.range]
+[rule.receiver-naming]
+[rule.time-naming]
+[rule.indent-error-flow]
+[rule.errorf]
+[rule.superfluous-else]
+[rule.unreachable-code]
+[rule.modifies-parameter]
+[rule.unnecessary-stmt]
+[rule.confusing-results]
+[rule.get-return]
+[rule.blank-imports]
+[rule.redefines-builtin-id]
+[rule.empty-lines]
+[rule.call-to-gc]
+[rule.atomic]
+[rule.waitgroup-by-value]
+[rule.range-val-in-closure]
+[rule.constant-logical-expr]
+[rule.modifies-value-receiver]
+[rule.bool-literal-in-expr]
+[rule.argument-limit]
+    arguments =[8]
+[rule.function-result-limit]
+    arguments =[8]
+[rule.imports-blacklist]
