@@ -26,33 +26,33 @@ import (
 
 	"tkestack.io/gpu-manager/cmd/manager/options"
 	"tkestack.io/gpu-manager/pkg/config"
+	"tkestack.io/gpu-manager/pkg/runtime"
 	"tkestack.io/gpu-manager/pkg/server"
 	"tkestack.io/gpu-manager/pkg/types"
 	"tkestack.io/gpu-manager/pkg/utils"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/golang/glog"
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
+	"k8s.io/klog"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 // #lizard forgives
 func Run(opt *options.Options) error {
 	cfg := &config.Config{
-		Driver:                opt.Driver,
-		QueryPort:             opt.QueryPort,
-		QueryAddr:             opt.QueryAddr,
-		KubeConfig:            opt.KubeConfigFile,
-		Standalone:            opt.Standalone,
-		SamplePeriod:          time.Duration(opt.SamplePeriod) * time.Second,
-		DockerEndpoint:        opt.DockerEndpoint,
-		VCudaRequestsQueue:    make(chan *types.VCudaRequest, 10),
-		DevicePluginPath:      pluginapi.DevicePluginPath,
-		VirtualManagerPath:    opt.VirtualManagerPath,
-		VolumeConfigPath:      opt.VolumeConfigPath,
-		EnableShare:           opt.EnableShare,
-		AllocationCheckPeriod: time.Duration(opt.AllocationCheckPeriod) * time.Second,
-		InClusterMode:         opt.InClusterMode,
-		CheckpointPath:        opt.CheckpointPath,
+		Driver:                   opt.Driver,
+		QueryPort:                opt.QueryPort,
+		QueryAddr:                opt.QueryAddr,
+		KubeConfig:               opt.KubeConfigFile,
+		SamplePeriod:             time.Duration(opt.SamplePeriod) * time.Second,
+		VCudaRequestsQueue:       make(chan *types.VCudaRequest, 10),
+		DevicePluginPath:         pluginapi.DevicePluginPath,
+		VirtualManagerPath:       opt.VirtualManagerPath,
+		VolumeConfigPath:         opt.VolumeConfigPath,
+		EnableShare:              opt.EnableShare,
+		AllocationCheckPeriod:    time.Duration(opt.AllocationCheckPeriod) * time.Second,
+		CheckpointPath:           opt.CheckpointPath,
+		ContainerRuntime:         opt.ContainerRuntime,
+		ContainerRuntimeEndpoint: opt.ContainerRuntimeEndpoint,
 	}
 
 	if len(opt.HostnameOverride) > 0 {
@@ -67,6 +67,12 @@ func Run(opt *options.Options) error {
 		cfg.DevicePluginPath = opt.DevicePluginPath
 	}
 
+	switch opt.ContainerRuntime {
+	case runtime.DockerRuntime, runtime.CRIORuntime:
+	default:
+		klog.Exitf("Unsupported container runtime: %s", opt.ContainerRuntime)
+	}
+
 	cfg.NodeLabels = make(map[string]string)
 	for _, item := range strings.Split(opt.NodeLabels, ",") {
 		if len(item) > 0 {
@@ -74,7 +80,7 @@ func Run(opt *options.Options) error {
 			if len(kvs) == 2 {
 				cfg.NodeLabels[kvs[0]] = kvs[1]
 			} else {
-				glog.Warningf("malformed node labels: %v", kvs)
+				klog.Warningf("malformed node labels: %v", kvs)
 			}
 		}
 	}
@@ -84,13 +90,13 @@ func Run(opt *options.Options) error {
 
 	retries := 0
 	for !srv.Ready() && retries < 10 {
-		glog.Infof("Wait for internal server ready")
+		klog.Infof("Wait for internal server ready")
 		time.Sleep(time.Second)
 		retries++
 	}
 
 	if retries == 10 {
-		glog.Warningf("Wait too long for server ready, restarting")
+		klog.Warningf("Wait too long for server ready, restarting")
 		os.Exit(1)
 	}
 
@@ -111,10 +117,10 @@ func Run(opt *options.Options) error {
 		case event := <-watcher.Events:
 			if event.Name == devicePluginSocket && event.Op&fsnotify.Create == fsnotify.Create {
 				time.Sleep(time.Second)
-				glog.Fatalf("inotify: %s created, restarting.", devicePluginSocket)
+				klog.Fatalf("inotify: %s created, restarting.", devicePluginSocket)
 			}
 		case err := <-watcher.Errors:
-			glog.Fatalf("inotify: %s", err)
+			klog.Fatalf("inotify: %s", err)
 		}
 	}
 	return nil

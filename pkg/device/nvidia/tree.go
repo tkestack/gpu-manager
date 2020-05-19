@@ -29,7 +29,7 @@ import (
 	"tkestack.io/gpu-manager/pkg/config"
 	"tkestack.io/gpu-manager/pkg/device"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"tkestack.io/nvml"
 )
 
@@ -94,12 +94,12 @@ func (t *NvidiaTree) Init(input string) {
 		return
 	}
 
-	glog.V(2).Infof("Can't use nvidia library, err %s. Use text parser", err)
+	klog.V(2).Infof("Can't use nvidia library, err %s. Use text parser", err)
 
 	err = t.parseFromString(input)
 
 	if err != nil {
-		glog.Fatalf("Can not initialize nvidia tree, err %s", err)
+		klog.Fatalf("Can not initialize nvidia tree, err %s", err)
 	}
 }
 
@@ -116,7 +116,7 @@ func (t *NvidiaTree) Update() {
 
 	defer nvml.Shutdown()
 
-	glog.V(4).Infof("Update device information")
+	klog.V(4).Infof("Update device information")
 
 	t.Lock()
 	defer t.Unlock()
@@ -132,7 +132,7 @@ func (t *NvidiaTree) Update() {
 			}
 		}
 
-		glog.V(4).Infof("node %d, pid: %+v, memory: %+v, utilization: %+v, pendingReset: %+v",
+		klog.V(4).Infof("node %d, pid: %+v, memory: %+v, utilization: %+v, pendingReset: %+v",
 			i, node.Meta.Pids, node.Meta.UsedMemory, node.Meta.Utilization, node.pendingReset)
 
 		node = node.Parent
@@ -184,7 +184,7 @@ func (t *NvidiaTree) parseFromLibrary() error {
 		return err
 	}
 
-	glog.V(2).Infof("Detect %d gpu cards", num)
+	klog.V(2).Infof("Detect %d gpu cards", num)
 
 	nodes := make(LevelMap)
 	t.leaves = make([]*NvidiaNode, num)
@@ -225,14 +225,14 @@ func (t *NvidiaTree) parseFromLibrary() error {
 			}
 
 			if newNode := t.join(nodes, ntype, int(cardA), int(cardB)); newNode != nil {
-				glog.V(2).Infof("New node, type %d, mask %b", int(ntype), newNode.Mask)
+				klog.V(2).Infof("New node, type %d, mask %b", int(ntype), newNode.Mask)
 				nodes[ntype] = append(nodes[ntype], newNode)
 			}
 		}
 	}
 
 	for t, ns := range nodes {
-		glog.V(2).Infof("type: %d, len %d", int(t), len(ns))
+		klog.V(2).Infof("type: %d, len %d", int(t), len(ns))
 	}
 
 	t.buildTree(nodes)
@@ -334,10 +334,10 @@ func (t *NvidiaTree) buildTree(nodes LevelMap) {
 	}
 
 	if len(firstLevel) == 0 {
-		glog.Errorf("No topology level found at %d", level)
+		klog.Errorf("No topology level found at %d", level)
 
 		if len(t.leaves) == 1 {
-			glog.Infof("Only one card topology")
+			klog.Infof("Only one card topology")
 			t.root.Mask |= t.leaves[0].Mask
 			t.leaves[0].setParent(t.root)
 
@@ -345,7 +345,7 @@ func (t *NvidiaTree) buildTree(nodes LevelMap) {
 			return
 		}
 
-		glog.Fatalf("Should not reach here")
+		klog.Fatalf("Should not reach here")
 	}
 
 	for _, n := range firstLevel {
@@ -384,7 +384,7 @@ func trimEmpty(splits []string) []string {
 }
 
 func (t *NvidiaTree) join(nodes LevelMap, ntype nvml.GpuTopologyLevel, indexA, indexB int) *NvidiaNode {
-	glog.V(5).Infof("Join %d and %d in type %d", indexA, indexB, int(ntype))
+	klog.V(5).Infof("Join %d and %d in type %d", indexA, indexB, int(ntype))
 	nodeA, nodeB := t.leaves[indexA], t.leaves[indexB]
 	mask := nodeA.Mask | nodeB.Mask
 	list := nodes[ntype]
@@ -392,7 +392,7 @@ func (t *NvidiaTree) join(nodes LevelMap, ntype nvml.GpuTopologyLevel, indexA, i
 	for _, n := range list {
 		if (n.Mask & mask) != 0 {
 			n.Mask |= mask
-			glog.V(5).Infof("Join to mask %b", n.Mask)
+			klog.V(5).Infof("Join to mask %b", n.Mask)
 			return nil
 		}
 	}
@@ -423,26 +423,26 @@ func (t *NvidiaTree) MarkFree(node *NvidiaNode, util int64, memory int64) {
 
 	n, ok := t.query[node.MinorName()]
 	if !ok {
-		glog.V(2).Infof("Can not find node with name(%s)", node.MinorName())
+		klog.V(2).Infof("Can not find node with name(%s)", node.MinorName())
 		return
 	}
 
-	glog.V(2).Infof("Free %s with %d %d", n.MinorName(), util, memory)
+	klog.V(2).Infof("Free %s with %d %d", n.MinorName(), util, memory)
 	// exclusive mode
 	if util >= HundredCore {
-		glog.V(2).Infof("%s cores %d->%d", n.MinorName(), n.AllocatableMeta.Cores, HundredCore)
+		klog.V(2).Infof("%s cores %d->%d", n.MinorName(), n.AllocatableMeta.Cores, HundredCore)
 		n.AllocatableMeta.Cores = HundredCore
-		glog.V(2).Infof("%s memory %d->%d", n.MinorName(), n.AllocatableMeta.Memory, n.Meta.TotalMemory)
+		klog.V(2).Infof("%s memory %d->%d", n.MinorName(), n.AllocatableMeta.Memory, n.Meta.TotalMemory)
 		n.AllocatableMeta.Memory = int64(n.Meta.TotalMemory)
 	} else {
-		glog.V(2).Infof("%s cores %d->%d", n.MinorName(), n.AllocatableMeta.Cores, n.AllocatableMeta.Cores+util)
+		klog.V(2).Infof("%s cores %d->%d", n.MinorName(), n.AllocatableMeta.Cores, n.AllocatableMeta.Cores+util)
 		n.AllocatableMeta.Cores += util
 		if n.AllocatableMeta.Cores > HundredCore {
 			n.AllocatableMeta.Cores = HundredCore
 		}
 
 		n.AllocatableMeta.Memory += memory
-		glog.V(2).Infof("%s memory %d->%d", n.MinorName(), n.AllocatableMeta.Memory, n.AllocatableMeta.Memory+memory)
+		klog.V(2).Infof("%s memory %d->%d", n.MinorName(), n.AllocatableMeta.Memory, n.AllocatableMeta.Memory+memory)
 		if n.AllocatableMeta.Memory > int64(n.Meta.TotalMemory) {
 			n.AllocatableMeta.Memory = int64(n.Meta.TotalMemory)
 		}
@@ -453,23 +453,23 @@ func (t *NvidiaTree) MarkFree(node *NvidiaNode, util int64, memory int64) {
 			n.pendingReset = true
 			// We need to clear user settings
 			if err := resetGPUFeature(n, t.realMode); err != nil {
-				glog.Warningf("can't reset GPU %s, %v", n.Meta.BusId, err)
+				klog.Warningf("can't reset GPU %s, %v", n.Meta.BusId, err)
 			}
 
 			if n.pendingReset {
-				glog.Warningf("GPU %s has some functional error, waiting for reset", n.Meta.BusId)
+				klog.Warningf("GPU %s has some functional error, waiting for reset", n.Meta.BusId)
 				return
 			}
 		}
 
-		glog.V(2).Infof("Free %s, mask %b", n.MinorName(), n.Mask)
+		klog.V(2).Infof("Free %s, mask %b", n.MinorName(), n.Mask)
 		t.freeNode(n)
 	}
 }
 
 func (t *NvidiaTree) freeNode(n *NvidiaNode) {
 	for p := n.Parent; p != nil; p = p.Parent {
-		glog.V(2).Infof("Free %s parent %b", n.MinorName(), p.Mask)
+		klog.V(2).Infof("Free %s parent %b", n.MinorName(), p.Mask)
 		p.Mask |= n.Mask
 	}
 }
@@ -484,27 +484,27 @@ func (t *NvidiaTree) MarkOccupied(node *NvidiaNode, util int64, memory int64) {
 
 	n, ok := t.query[node.MinorName()]
 	if !ok {
-		glog.V(2).Infof("Can not find node with name(%s)", node.MinorName())
+		klog.V(2).Infof("Can not find node with name(%s)", node.MinorName())
 		return
 	}
 
-	glog.V(2).Infof("Occupy %s with %d %d, mask %b", n.MinorName(), util, memory, n.Mask)
+	klog.V(2).Infof("Occupy %s with %d %d, mask %b", n.MinorName(), util, memory, n.Mask)
 	t.occupyNode(n)
 
 	// exclusive mode
 	if util >= HundredCore {
-		glog.V(2).Infof("%s cores %d->%d", n.MinorName(), n.AllocatableMeta.Cores, 0)
-		glog.V(2).Infof("%s memory %d->%d", n.MinorName(), n.AllocatableMeta.Memory, 0)
+		klog.V(2).Infof("%s cores %d->%d", n.MinorName(), n.AllocatableMeta.Cores, 0)
+		klog.V(2).Infof("%s memory %d->%d", n.MinorName(), n.AllocatableMeta.Memory, 0)
 		n.AllocatableMeta.Cores = 0
 		n.AllocatableMeta.Memory = 0
 	} else {
-		glog.V(2).Infof("%s cores %d->%d", n.MinorName(), n.AllocatableMeta.Cores, n.AllocatableMeta.Cores-util)
+		klog.V(2).Infof("%s cores %d->%d", n.MinorName(), n.AllocatableMeta.Cores, n.AllocatableMeta.Cores-util)
 		n.AllocatableMeta.Cores -= util
 		if n.AllocatableMeta.Cores < 0 {
 			n.AllocatableMeta.Cores = 0
 		}
 
-		glog.V(2).Infof("%s memory %d->%d", n.MinorName(), n.AllocatableMeta.Memory, n.AllocatableMeta.Memory-memory)
+		klog.V(2).Infof("%s memory %d->%d", n.MinorName(), n.AllocatableMeta.Memory, n.AllocatableMeta.Memory-memory)
 		n.AllocatableMeta.Memory -= memory
 		if n.AllocatableMeta.Memory < 0 {
 			n.AllocatableMeta.Memory = 0
@@ -515,7 +515,7 @@ func (t *NvidiaTree) MarkOccupied(node *NvidiaNode, util int64, memory int64) {
 func (t *NvidiaTree) occupyNode(n *NvidiaNode) {
 	for p := n.Parent; p != nil; p = p.Parent {
 		if p.Mask&n.Mask == n.Mask {
-			glog.V(2).Infof("Occupy %s parent %b", n.MinorName(), p.Mask)
+			klog.V(2).Infof("Occupy %s parent %b", n.MinorName(), p.Mask)
 			p.Mask ^= n.Mask
 		}
 	}
@@ -540,7 +540,7 @@ func (t *NvidiaTree) Root() *NvidiaNode {
 func (t *NvidiaTree) Query(name string) *NvidiaNode {
 	n, ok := t.query[name]
 	if !ok {
-		glog.V(5).Infof("Can not find node with name(%s)", name)
+		klog.V(5).Infof("Can not find node with name(%s)", name)
 		return nil
 	}
 
@@ -639,7 +639,7 @@ func resetGPUFeature(node *NvidiaNode, realMode bool) error {
 		dev, _ := nvml.DeviceGetHandleByIndex(uint(node.Meta.ID))
 		err := dev.DeviceSetComputeMode(nvml.COMPUTEMODE_DEFAULT)
 		if err != nil {
-			glog.V(3).Infof("can't set compute mode to default for %s, %v", node.Meta.BusId, err)
+			klog.V(3).Infof("can't set compute mode to default for %s, %v", node.Meta.BusId, err)
 			return err
 		}
 
@@ -651,17 +651,17 @@ func resetGPUFeature(node *NvidiaNode, realMode bool) error {
 				return nil
 			}
 
-			glog.V(3).Infof("can't get ecc mode for %s, %v", node.Meta.BusId, err)
+			klog.V(3).Infof("can't get ecc mode for %s, %v", node.Meta.BusId, err)
 			return err
 		}
 
 		if curMode {
 			if err = dev.DeviceClearEccErrorCounts(nvml.VOLATILE_ECC); err != nil {
-				glog.V(3).Infof("can't clear volatile ecc for %s, %v", node.Meta.BusId, err)
+				klog.V(3).Infof("can't clear volatile ecc for %s, %v", node.Meta.BusId, err)
 				return err
 			}
 			if err = dev.DeviceClearEccErrorCounts(nvml.AGGREGATE_ECC); err != nil {
-				glog.V(3).Infof("can't clear volatile ecc for %s, %v", node.Meta.BusId, err)
+				klog.V(3).Infof("can't clear volatile ecc for %s, %v", node.Meta.BusId, err)
 				return err
 			}
 		}

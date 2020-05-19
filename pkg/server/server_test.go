@@ -35,6 +35,7 @@ import (
 	"tkestack.io/gpu-manager/pkg/config"
 	deviceFactory "tkestack.io/gpu-manager/pkg/device"
 	"tkestack.io/gpu-manager/pkg/device/nvidia"
+	fake_runtime "tkestack.io/gpu-manager/pkg/runtime/fake"
 	allocFactory "tkestack.io/gpu-manager/pkg/services/allocator"
 	virtual_manager "tkestack.io/gpu-manager/pkg/services/virtual-manager"
 	"tkestack.io/gpu-manager/pkg/services/watchdog"
@@ -48,7 +49,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 func init() {
@@ -117,7 +118,6 @@ func stopServer(srv *managerImpl) {
 }
 
 func TestServer(t *testing.T) {
-	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	tempDir, _ := ioutil.TempDir("", "gpu-manager")
 
@@ -132,9 +132,7 @@ func TestServer(t *testing.T) {
 		QueryPort:             opt.QueryPort,
 		QueryAddr:             opt.QueryAddr,
 		KubeConfig:            opt.KubeConfigFile,
-		Standalone:            opt.Standalone,
 		SamplePeriod:          time.Duration(opt.SamplePeriod) * time.Second,
-		DockerEndpoint:        opt.DockerEndpoint,
 		VCudaRequestsQueue:    make(chan *types.VCudaRequest, 10),
 		DevicePluginPath:      opt.DevicePluginPath,
 		VirtualManagerPath:    opt.VirtualManagerPath,
@@ -159,7 +157,8 @@ func TestServer(t *testing.T) {
 
 	// init manager
 	srv, _ := NewManager(cfg).(*managerImpl)
-	srv.virtualManager = virtual_manager.NewVirtualManagerForTest(cfg)
+	fakeRuntimeManager, _ := fake_runtime.NewFakeRuntimeManager()
+	srv.virtualManager = virtual_manager.NewVirtualManagerForTest(cfg, fakeRuntimeManager)
 	srv.virtualManager.Run()
 	defer stopServer(srv)
 

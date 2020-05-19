@@ -37,14 +37,11 @@ import (
 	"tkestack.io/gpu-manager/pkg/types"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"k8s.io/api/core/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
+	"k8s.io/klog"
 )
 
 //constants used in this package
@@ -109,7 +106,7 @@ func (l *linuxCgroupProcs) Read(cgroupParent, containerID string) []int {
 
 	f, err := os.Open(procsFile)
 	if err != nil {
-		glog.Errorf("can't read %s, %v", procsFile, err)
+		klog.Errorf("can't read %s, %v", procsFile, err)
 		return nil
 	}
 	defer f.Close()
@@ -123,14 +120,14 @@ func (l *linuxCgroupProcs) Read(cgroupParent, containerID string) []int {
 		}
 	}
 
-	glog.V(4).Infof("Read from %s, pids: %v", procsFile, pids)
+	klog.V(4).Infof("Read from %s, pids: %v", procsFile, pids)
 	return pids
 }
 
 func (l *linuxCgroupProcs) Write(cgroupParent, containerID string, pids []int) error {
 	procsFile := l.getProcFile(cgroupParent, containerID)
 
-	glog.Infof("Try to write pid file at %s", procsFile)
+	klog.Infof("Try to write pid file at %s", procsFile)
 	f, err := os.OpenFile(procsFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0777)
 	if err != nil {
 		return err
@@ -144,7 +141,7 @@ func (l *linuxCgroupProcs) Write(cgroupParent, containerID string, pids []int) e
 		}
 	}
 
-	glog.V(4).Infof("Write down %s, pids: %v", procsFile, pids)
+	klog.V(4).Infof("Write down %s, pids: %v", procsFile, pids)
 	return nil
 }
 
@@ -205,7 +202,7 @@ func NewFSWatcher(files ...string) (*fsnotify.Watcher, error) {
 func TruncateContainerName(name string) string {
 	if len(name) > TruncateLen {
 		newName := name[:TruncateLen]
-		glog.V(2).Infof("truncate container name from %s to %s", name, newName)
+		klog.V(2).Infof("truncate container name from %s to %s", name, newName)
 		return newName
 	}
 
@@ -230,7 +227,7 @@ func GetCheckpointData(devicePluginPath string) (*types.Checkpoint, error) {
 	if err != nil {
 		return nil, err
 	}
-	glog.V(4).Infof("Try v2 checkpoint data format")
+	klog.V(4).Infof("Try v2 checkpoint data format")
 	err = json.Unmarshal(data, cpV2Data)
 	if err != nil {
 		return nil, err
@@ -240,7 +237,7 @@ func GetCheckpointData(devicePluginPath string) (*types.Checkpoint, error) {
 		return cpV2Data.Data, nil
 	}
 
-	glog.V(4).Infof("Try v1 checkpoint data format")
+	klog.V(4).Infof("Try v1 checkpoint data format")
 	cpV1Data := &types.Checkpoint{}
 	err = json.Unmarshal(data, cpV1Data)
 	if err != nil {
@@ -273,14 +270,14 @@ func MakeContainerNamePrefix(containerName string) string {
 }
 
 func IsGPURequiredPod(pod *v1.Pod) bool {
-	glog.V(4).Infof("Determine if the pod %s needs GPU resource", pod.Name)
+	klog.V(4).Infof("Determine if the pod %s needs GPU resource", pod.Name)
 
 	vcore := GetGPUResourceOfPod(pod, types.VCoreAnnotation)
 	vmemory := GetGPUResourceOfPod(pod, types.VMemoryAnnotation)
 
 	// Check if pod request for GPU resource
 	if vcore <= 0 || (vcore < nvtree.HundredCore && vmemory <= 0) {
-		glog.V(4).Infof("Pod %s in namespace %s does not Request for GPU resource",
+		klog.V(4).Infof("Pod %s in namespace %s does not Request for GPU resource",
 			pod.Name,
 			pod.Namespace)
 		return false
@@ -290,14 +287,14 @@ func IsGPURequiredPod(pod *v1.Pod) bool {
 }
 
 func IsGPURequiredContainer(c *v1.Container) bool {
-	glog.V(4).Infof("Determine if the container %s needs GPU resource", c.Name)
+	klog.V(4).Infof("Determine if the container %s needs GPU resource", c.Name)
 
 	vcore := GetGPUResourceOfContainer(c, types.VCoreAnnotation)
 	vmemory := GetGPUResourceOfContainer(c, types.VMemoryAnnotation)
 
 	// Check if container request for GPU resource
 	if vcore <= 0 || (vcore < nvtree.HundredCore && vmemory <= 0) {
-		glog.V(4).Infof("Container %s does not Request for GPU resource", c.Name)
+		klog.V(4).Infof("Container %s does not Request for GPU resource", c.Name)
 		return false
 	}
 
@@ -329,12 +326,12 @@ func ShouldDelete(pod *v1.Pod) bool {
 }
 
 func IsGPUPredicatedPod(pod *v1.Pod) (predicated bool) {
-	glog.V(4).Infof("Determine if the pod %s needs GPU resource", pod.Name)
+	klog.V(4).Infof("Determine if the pod %s needs GPU resource", pod.Name)
 	var ok bool
 
 	// Check if pod request for GPU resource
 	if GetGPUResourceOfPod(pod, types.VCoreAnnotation) <= 0 || GetGPUResourceOfPod(pod, types.VMemoryAnnotation) <= 0 {
-		glog.V(4).Infof("Pod %s in namespace %s does not Request for GPU resource",
+		klog.V(4).Infof("Pod %s in namespace %s does not Request for GPU resource",
 			pod.Name,
 			pod.Namespace)
 		return predicated
@@ -342,7 +339,7 @@ func IsGPUPredicatedPod(pod *v1.Pod) (predicated bool) {
 
 	// Check if pod already has predicate time
 	if _, ok = pod.ObjectMeta.Annotations[types.PredicateTimeAnnotation]; !ok {
-		glog.V(4).Infof("No predicate time for pod %s in namespace %s",
+		klog.V(4).Infof("No predicate time for pod %s in namespace %s",
 			pod.Name,
 			pod.Namespace)
 		return predicated
@@ -350,12 +347,12 @@ func IsGPUPredicatedPod(pod *v1.Pod) (predicated bool) {
 
 	// Check if pod has already been assigned
 	if assigned, ok := pod.ObjectMeta.Annotations[types.GPUAssigned]; !ok {
-		glog.V(4).Infof("No assigned flag for pod %s in namespace %s",
+		klog.V(4).Infof("No assigned flag for pod %s in namespace %s",
 			pod.Name,
 			pod.Namespace)
 		return predicated
 	} else if assigned == "true" {
-		glog.V(4).Infof("pod %s in namespace %s has already been assigned",
+		klog.V(4).Infof("pod %s in namespace %s has already been assigned",
 			pod.Name,
 			pod.Namespace)
 		return predicated
@@ -367,12 +364,12 @@ func IsGPUPredicatedPod(pod *v1.Pod) (predicated bool) {
 // Check if pod has already been assigned
 func IsGPUAssignedPod(pod *v1.Pod) bool {
 	if assigned, ok := pod.ObjectMeta.Annotations[types.GPUAssigned]; !ok {
-		glog.V(4).Infof("No assigned flag for pod %s in namespace %s",
+		klog.V(4).Infof("No assigned flag for pod %s in namespace %s",
 			pod.Name,
 			pod.Namespace)
 		return false
 	} else if assigned == "false" {
-		glog.V(4).Infof("pod %s in namespace %s has not been assigned",
+		klog.V(4).Infof("pod %s in namespace %s has not been assigned",
 			pod.Name,
 			pod.Namespace)
 		return false
@@ -385,7 +382,7 @@ func GetPredicateTimeOfPod(pod *v1.Pod) (predicateTime uint64) {
 	if predicateTimeStr, ok := pod.ObjectMeta.Annotations[types.PredicateTimeAnnotation]; ok {
 		u64, err := strconv.ParseUint(predicateTimeStr, 10, 64)
 		if err != nil {
-			glog.Warningf("Failed to parse predicate Timestamp %s due to %v", predicateTimeStr, err)
+			klog.Warningf("Failed to parse predicate Timestamp %s due to %v", predicateTimeStr, err)
 		} else {
 			predicateTime = u64
 		}
@@ -418,16 +415,4 @@ func GetContainerIndexByName(pod *v1.Pod, containerName string) (int, error) {
 		return containerIndex, fmt.Errorf("failed to get index of container %s in pod %s", containerName, pod.UID)
 	}
 	return containerIndex, nil
-}
-
-func CreateDockerClient(endpoint string) libdocker.Interface {
-	runtimeRequestTimeout := metav1.Duration{Duration: 2 * time.Minute}
-	imagePullProgressDeadline := metav1.Duration{Duration: 1 * time.Minute}
-	dockerClientConfig := &dockershim.ClientConfig{
-		DockerEndpoint:            endpoint,
-		RuntimeRequestTimeout:     runtimeRequestTimeout.Duration,
-		ImagePullProgressDeadline: imagePullProgressDeadline.Duration,
-	}
-
-	return dockershim.NewDockerClientFromConfig(dockerClientConfig)
 }

@@ -20,7 +20,7 @@ package nvidia
 import (
 	"sort"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 
 	"tkestack.io/gpu-manager/pkg/device/nvidia"
 )
@@ -48,14 +48,14 @@ func (al *linkMode) Evaluate(cores int64, memory int64) []*nvidia.NvidiaNode {
 
 	for _, node := range al.tree.Leaves() {
 		for node != root {
-			glog.V(2).Infof("Test %d mask %b", node.Meta.ID, node.Mask)
+			klog.V(2).Infof("Test %d mask %b", node.Meta.ID, node.Mask)
 			if node.Available() < num {
 				node = node.Parent
 				continue
 			}
 
 			tmpStore[node.Meta.ID] = node
-			glog.V(2).Infof("Choose %d mask %b", node.Meta.ID, node.Mask)
+			klog.V(2).Infof("Choose %d mask %b", node.Meta.ID, node.Mask)
 			break
 		}
 	}
@@ -76,7 +76,7 @@ func (al *linkMode) Evaluate(cores int64, memory int64) []*nvidia.NvidiaNode {
 			break
 		}
 
-		glog.V(2).Infof("Pick up %d mask %b", n.Meta.ID, n.Mask)
+		klog.V(2).Infof("Pick up %d mask %b", n.Meta.ID, n.Mask)
 		nodes = append(nodes, n)
 		num--
 	}

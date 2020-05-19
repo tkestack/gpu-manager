@@ -22,47 +22,48 @@ import (
 )
 
 const (
-	DefaultDriver                = "nvidia"
-	DefaultQueryPort             = 5678
-	DefaultSamplePeriod          = 1
-	DefaultDockerHost            = "unix:////var/run/docker.sock"
-	DefaultVirtualManagerPath    = "/etc/gpu-manager/vm"
-	DefaultAllocationCheckPeriod = 30
-	DefaultCheckpointPath        = "/etc/gpu-manager"
+	DefaultDriver                   = "nvidia"
+	DefaultQueryPort                = 5678
+	DefaultSamplePeriod             = 1
+	DefaultVirtualManagerPath       = "/etc/gpu-manager/vm"
+	DefaultAllocationCheckPeriod    = 30
+	DefaultCheckpointPath           = "/etc/gpu-manager"
+	DefaultContainerRuntime         = "docker"
+	DefaultContainerRuntimeEndpoint = "unix:///var/run/docker.sock"
 )
 
 // Options contains plugin information
 type Options struct {
-	Driver                string
-	ExtraPath             string
-	DockerEndpoint        string
-	VolumeConfigPath      string
-	QueryPort             int
-	QueryAddr             string
-	KubeConfigFile        string
-	Standalone            bool
-	SamplePeriod          int
-	NodeLabels            string
-	HostnameOverride      string
-	VirtualManagerPath    string
-	DevicePluginPath      string
-	EnableShare           bool
-	AllocationCheckPeriod int
-	InClusterMode         bool
-	CheckpointPath        string
+	Driver                   string
+	ExtraPath                string
+	VolumeConfigPath         string
+	QueryPort                int
+	QueryAddr                string
+	KubeConfigFile           string
+	SamplePeriod             int
+	NodeLabels               string
+	HostnameOverride         string
+	VirtualManagerPath       string
+	DevicePluginPath         string
+	EnableShare              bool
+	AllocationCheckPeriod    int
+	CheckpointPath           string
+	ContainerRuntime         string
+	ContainerRuntimeEndpoint string
 }
 
 // NewOptions gives a default options template.
 func NewOptions() *Options {
 	return &Options{
-		Driver:                DefaultDriver,
-		QueryPort:             DefaultQueryPort,
-		QueryAddr:             "localhost",
-		SamplePeriod:          DefaultSamplePeriod,
-		DockerEndpoint:        DefaultDockerHost,
-		VirtualManagerPath:    DefaultVirtualManagerPath,
-		AllocationCheckPeriod: DefaultAllocationCheckPeriod,
-		CheckpointPath:        DefaultCheckpointPath,
+		Driver:                   DefaultDriver,
+		QueryPort:                DefaultQueryPort,
+		QueryAddr:                "localhost",
+		SamplePeriod:             DefaultSamplePeriod,
+		VirtualManagerPath:       DefaultVirtualManagerPath,
+		AllocationCheckPeriod:    DefaultAllocationCheckPeriod,
+		CheckpointPath:           DefaultCheckpointPath,
+		ContainerRuntime:         DefaultContainerRuntime,
+		ContainerRuntimeEndpoint: DefaultContainerRuntimeEndpoint,
 	}
 }
 
@@ -71,11 +72,9 @@ func (opt *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&opt.Driver, "driver", opt.Driver, "The driver name for manager")
 	fs.StringVar(&opt.ExtraPath, "extra-config", opt.ExtraPath, "The extra config file location")
 	fs.StringVar(&opt.VolumeConfigPath, "volume-config", opt.VolumeConfigPath, "The volume config file location")
-	fs.StringVar(&opt.DockerEndpoint, "docker-endpoint", opt.DockerEndpoint, "Use this for the docker endpoint to communicate with")
 	fs.IntVar(&opt.QueryPort, "query-port", opt.QueryPort, "port for query statistics information")
 	fs.StringVar(&opt.QueryAddr, "query-addr", opt.QueryAddr, "address for query statistics information")
 	fs.StringVar(&opt.KubeConfigFile, "kubeconfig", opt.KubeConfigFile, "Path to kubeconfig file with authorization information (the master location is set by the master flag).")
-	fs.BoolVar(&opt.Standalone, "standalone", opt.Standalone, "Standalone mode(with no kubernetes API server")
 	fs.IntVar(&opt.SamplePeriod, "sample-period", opt.SamplePeriod, "Sample period for each card, unit second")
 	fs.StringVar(&opt.NodeLabels, "node-labels", opt.NodeLabels, "automated label for this node, if empty, node will be only labeled by gpu model")
 	fs.StringVar(&opt.HostnameOverride, "hostname-override", opt.HostnameOverride, "If non-empty, will use this string as identification instead of the actual hostname.")
@@ -84,5 +83,6 @@ func (opt *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&opt.CheckpointPath, "checkpoint-path", opt.CheckpointPath, "configuration path for checkpoint store file")
 	fs.BoolVar(&opt.EnableShare, "share-mode", opt.EnableShare, "enable share mode allocation")
 	fs.IntVar(&opt.AllocationCheckPeriod, "allocation-check-period", opt.AllocationCheckPeriod, "allocation check period, unit second")
-	fs.BoolVar(&opt.InClusterMode, "incluster-mode", opt.InClusterMode, "Tell manager kubeconfig is built from in cluster token")
+	fs.StringVar(&opt.ContainerRuntime, "container-runtime", opt.ContainerRuntime, "container runtime name")
+	fs.StringVar(&opt.ContainerRuntimeEndpoint, "container-runtime-endpoint", opt.ContainerRuntimeEndpoint, "container runtime endpoint")
 }

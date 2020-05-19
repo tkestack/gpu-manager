@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os"
 
+	"k8s.io/klog"
+
 	"tkestack.io/gpu-manager/cmd/manager/app"
 	"tkestack.io/gpu-manager/cmd/manager/options"
 	"tkestack.io/gpu-manager/pkg/flags"
@@ -32,6 +34,7 @@ import (
 )
 
 func main() {
+	klog.InitFlags(nil)
 	opt := options.NewOptions()
 	opt.AddFlags(pflag.CommandLine)
 

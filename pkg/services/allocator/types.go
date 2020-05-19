@@ -21,9 +21,9 @@ import (
 	"tkestack.io/gpu-manager/pkg/config"
 	"tkestack.io/gpu-manager/pkg/device"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"k8s.io/client-go/kubernetes"
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 //GPUTopoService is server api for GPU topology service
@@ -45,7 +45,7 @@ func Register(name string, item NewFunc) {
 		return
 	}
 
-	glog.V(2).Infof("Register NewFunc with name %s", name)
+	klog.V(2).Infof("Register NewFunc with name %s", name)
 
 	factory[name] = item
 }
@@ -56,7 +56,7 @@ func NewFuncForName(name string) NewFunc {
 		return item
 	}
 
-	glog.V(2).Infof("Can not find NewFunc with name %s", name)
+	klog.V(2).Infof("Can not find NewFunc with name %s", name)
 
 	return nil
 }

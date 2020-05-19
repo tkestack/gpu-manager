@@ -25,23 +25,22 @@ import (
 
 // Config contains the necessary options for the plugin.
 type Config struct {
-	Driver                string
-	ExtraConfigPath       string
-	DockerEndpoint        string
-	QueryPort             int
-	QueryAddr             string
-	KubeConfig            string
-	Standalone            bool
-	SamplePeriod          time.Duration
-	Hostname              string
-	NodeLabels            map[string]string
-	VirtualManagerPath    string
-	DevicePluginPath      string
-	VolumeConfigPath      string
-	EnableShare           bool
-	AllocationCheckPeriod time.Duration
-	InClusterMode         bool
-	CheckpointPath        string
+	Driver                   string
+	ExtraConfigPath          string
+	QueryPort                int
+	QueryAddr                string
+	KubeConfig               string
+	SamplePeriod             time.Duration
+	Hostname                 string
+	NodeLabels               map[string]string
+	VirtualManagerPath       string
+	DevicePluginPath         string
+	VolumeConfigPath         string
+	EnableShare              bool
+	AllocationCheckPeriod    time.Duration
+	CheckpointPath           string
+	ContainerRuntime         string
+	ContainerRuntimeEndpoint string
 
 	VCudaRequestsQueue chan *types.VCudaRequest
 }

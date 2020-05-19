@@ -30,7 +30,6 @@ func init() {
 }
 
 func TestTree(t *testing.T) {
-	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	testCase1 :=
 		`    GPU0    GPU1    GPU2    GPU3    GPU4    GPU5

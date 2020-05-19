@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"math/bits"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 
 	"tkestack.io/nvml"
 )
@@ -104,7 +104,7 @@ func (n *NvidiaNode) GetAvailableLeaves() []*NvidiaNode {
 
 	for mask != 0 {
 		id := uint32(bits.TrailingZeros32(mask))
-		glog.V(2).Infof("Pick up %d mask %b", id, n.tree.leaves[id].Mask)
+		klog.V(2).Infof("Pick up %d mask %b", id, n.tree.leaves[id].Mask)
 		leaves = append(leaves, n.tree.leaves[id])
 		mask ^= one << id
 	}

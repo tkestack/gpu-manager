@@ -35,7 +35,7 @@ func WordSepNormalizeFunc(f *pflag.FlagSet, name string) pflag.NormalizedName {
 // InitFlags normalizes and parses the command line flags
 func InitFlags() {
 	pflag.CommandLine.SetNormalizeFunc(WordSepNormalizeFunc)
-	// Only glog flags will be added
+	// Only klog flags will be added
 	goflag.CommandLine.VisitAll(func(goflag *goflag.Flag) {
 		switch goflag.Name {
 		case "logtostderr", "alsologtostderr",

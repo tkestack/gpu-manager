@@ -20,7 +20,7 @@ package device
 import (
 	"tkestack.io/gpu-manager/pkg/config"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 //GPUTree is an interface for GPU tree structure
@@ -43,7 +43,7 @@ func Register(name string, item NewFunc) {
 		return
 	}
 
-	glog.V(2).Infof("Register NewFunc with name %s", name)
+	klog.V(2).Infof("Register NewFunc with name %s", name)
 
 	factory[name] = item
 }
@@ -55,7 +55,7 @@ func NewFuncForName(name string) NewFunc {
 		return item
 	}
 
-	glog.V(2).Infof("Can not find NewFunc with name %s", name)
+	klog.V(2).Infof("Can not find NewFunc with name %s", name)
 
 	return nil
 }

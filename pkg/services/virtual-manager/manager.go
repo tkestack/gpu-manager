@@ -33,14 +33,14 @@ import (
 	vcudaapi "tkestack.io/gpu-manager/pkg/api/runtime/vcuda"
 	"tkestack.io/gpu-manager/pkg/config"
 	"tkestack.io/gpu-manager/pkg/device/nvidia"
+	"tkestack.io/gpu-manager/pkg/runtime"
 	"tkestack.io/gpu-manager/pkg/services/watchdog"
 	"tkestack.io/gpu-manager/pkg/types"
 	"tkestack.io/gpu-manager/pkg/utils"
 
-	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
+	"k8s.io/klog"
 )
 
 //#include <stdint.h>
@@ -142,36 +142,26 @@ const (
 type VirtualManager struct {
 	sync.Mutex
 
-	cfg            *config.Config
-	dockerClient   libdocker.Interface
-	vDeviceServers map[string]*grpc.Server
-	procsReader    utils.CgroupProcsReader
-	hostName       string
+	cfg                     *config.Config
+	containerRuntimeManager runtime.ContainerRuntimeInterface
+	vDeviceServers          map[string]*grpc.Server
+	procsReader             utils.CgroupProcsReader
 }
 
 var _ vcudaapi.VCUDAServiceServer = &VirtualManager{}
 
 //NewVirtualManager returns a new VirtualManager.
-func NewVirtualManager(config *config.Config) *VirtualManager {
-	var hostname string
-	if len(config.Hostname) == 0 {
-		hostname, _ = os.Hostname()
-	} else {
-		hostname = config.Hostname
-	}
-
-	dockerClient := utils.CreateDockerClient(config.DockerEndpoint)
-	info, err := dockerClient.Info()
+func NewVirtualManager(config *config.Config, runtimeManager runtime.ContainerRuntimeInterface) *VirtualManager {
+	cgroupDriver, err := runtimeManager.CgroupDriver()
 	if err != nil {
-		glog.Fatalf("Cant't get docker info: %v", err)
+		klog.Fatalf("Cant't get docker info: %v", err)
 	}
 
 	manager := &VirtualManager{
-		cfg:            config,
-		dockerClient:   dockerClient,
-		vDeviceServers: make(map[string]*grpc.Server),
-		procsReader:    utils.NewCgroupProcs(types.CGROUP_BASE, info.CgroupDriver),
-		hostName:       hostname,
+		cfg:                     config,
+		containerRuntimeManager: runtimeManager,
+		vDeviceServers:          make(map[string]*grpc.Server),
+		procsReader:             utils.NewCgroupProcs(types.CGROUP_BASE, cgroupDriver),
 	}
 
 	return manager
@@ -179,11 +169,11 @@ func NewVirtualManager(config *config.Config) *VirtualManager {
 
 //NewVirtualManagerForTest returns a new VirtualManager with fake docker
 //client for testing.
-func NewVirtualManagerForTest(config *config.Config) *VirtualManager {
+func NewVirtualManagerForTest(config *config.Config, runtimeManager runtime.ContainerRuntimeInterface) *VirtualManager {
 	manager := &VirtualManager{
-		cfg:            config,
-		dockerClient:   libdocker.NewFakeDockerClient(),
-		vDeviceServers: make(map[string]*grpc.Server),
+		cfg:                     config,
+		vDeviceServers:          make(map[string]*grpc.Server),
+		containerRuntimeManager: runtimeManager,
 	}
 
 	return manager
@@ -192,11 +182,11 @@ func NewVirtualManagerForTest(config *config.Config) *VirtualManager {
 //Run starts a VirtualManager
 func (vm *VirtualManager) Run() {
 	if len(vm.cfg.VirtualManagerPath) == 0 {
-		glog.Fatalf("Please set virtual manager path")
+		klog.Fatalf("Please set virtual manager path")
 	}
 
 	if err := os.MkdirAll(vm.cfg.VirtualManagerPath, DEFAULT_DIR_MODE); err != nil && !os.IsNotExist(err) {
-		glog.Fatalf("can't create %s, error %s", vm.cfg.VirtualManagerPath, err)
+		klog.Fatalf("can't create %s, error %s", vm.cfg.VirtualManagerPath, err)
 	}
 
 	registered := make(chan struct{})
@@ -206,7 +196,7 @@ func (vm *VirtualManager) Run() {
 	go vm.garbageCollector()
 	go vm.process()
 	go vm.healthCheck()
-	glog.V(2).Infof("Virtual manager is running")
+	klog.V(2).Infof("Virtual manager is running")
 }
 
 func (vm *VirtualManager) healthCheck() {
@@ -215,44 +205,40 @@ func (vm *VirtualManager) healthCheck() {
 	defer checker.Stop()
 
 	for range checker.C {
-		_, err := vm.dockerClient.Info()
+		_, err := vm.containerRuntimeManager.CgroupDriver()
 		if err == nil {
 			lastSuccessProbe = time.Now()
 			continue
 		}
 
-		glog.Warningf("Probe docker version failed, %v", err)
+		klog.Warningf("Probe docker version failed, %v", err)
 		if int(time.Now().Sub(lastSuccessProbe).Seconds()) > 10 {
-			glog.Fatalf("Too long to probe docker version, maybe docker is down, restarting")
+			klog.Fatalf("Too long to probe docker version, maybe docker is down, restarting")
 		}
 	}
 }
 
 func (vm *VirtualManager) vDeviceWatcher(registered chan struct{}) {
-	glog.V(2).Infof("Start vDevice watcher")
+	klog.V(2).Infof("Start vDevice watcher")
 
-	for uid, pod := range watchdog.GetActivePods() {
-		if pod.Spec.NodeName != vm.hostName {
-			continue
-		}
-
+	for uid := range watchdog.GetActivePods() {
 		func() {
 			baseDir := filepath.Clean(filepath.Join(vm.cfg.VirtualManagerPath, uid))
 			f, err := os.Open(baseDir)
 			if err != nil {
 				if os.IsNotExist(err) {
-					glog.Warningf("Pod %s was created by old manager, upgrade to new pattern", uid)
+					klog.Warningf("Pod %s was created by old manager, upgrade to new pattern", uid)
 					os.MkdirAll(filepath.Clean(filepath.Join(vm.cfg.VirtualManagerPath, uid)), DEFAULT_DIR_MODE)
 					return
 				}
 
-				glog.Fatalf("Can't open %s, error %s", vm.cfg.VirtualManagerPath, err)
+				klog.Fatalf("Can't open %s, error %s", vm.cfg.VirtualManagerPath, err)
 			}
 			defer f.Close()
 
 			files, err := f.Readdir(-1)
 			if err != nil {
-				glog.Warningf("Read directory for %s failed, error %s", vm.cfg.VirtualManagerPath, err)
+				klog.Warningf("Read directory for %s failed, error %s", vm.cfg.VirtualManagerPath, err)
 				return
 			}
 
@@ -265,24 +251,24 @@ func (vm *VirtualManager) vDeviceWatcher(registered chan struct{}) {
 				if len(filepath.Join(dirName, types.VDeviceSocket)) < 108 {
 					srv := runVDeviceServer(dirName, vm)
 					if srv == nil {
-						glog.Fatalf("Can't recover vDevice server for %s", dirName)
+						klog.Fatalf("Can't recover vDevice server for %s", dirName)
 					}
 
-					glog.V(2).Infof("Recover vDevice server for %s", dirName)
+					klog.V(2).Infof("Recover vDevice server for %s", dirName)
 					vm.Lock()
 					vm.vDeviceServers[dirName] = srv
 					vm.Unlock()
 				} else {
-					glog.Warningf("Ignore directory %s", dirName)
+					klog.Warningf("Ignore directory %s", dirName)
 				}
 			}
 
 			srv := runVDeviceServer(baseDir, vm)
 			if srv == nil {
-				glog.Fatalf("Can't recover vDevice server for %s", baseDir)
+				klog.Fatalf("Can't recover vDevice server for %s", baseDir)
 			}
 
-			glog.V(2).Infof("Recover vDevice server for %s", baseDir)
+			klog.V(2).Infof("Recover vDevice server for %s", baseDir)
 			vm.Lock()
 			vm.vDeviceServers[baseDir] = srv
 			vm.Unlock()
@@ -298,7 +284,7 @@ func (vm *VirtualManager) vDeviceWatcher(registered chan struct{}) {
 		for dir, srv := range vm.vDeviceServers {
 			_, err := os.Stat(dir)
 			if err != nil && os.IsNotExist(err) {
-				glog.V(2).Infof("Close orphaned server %s", dir)
+				klog.V(2).Infof("Close orphaned server %s", dir)
 				srv.Stop()
 				delete(vm.vDeviceServers, dir)
 			}
@@ -307,20 +293,20 @@ func (vm *VirtualManager) vDeviceWatcher(registered chan struct{}) {
 }
 
 func (vm *VirtualManager) garbageCollector() {
-	glog.V(2).Infof("Starting garbage directory collector")
+	klog.V(2).Infof("Starting garbage directory collector")
 	wait.Forever(func() {
 		needDeleted := make([]string, 0)
 
 		f, err := os.Open(vm.cfg.VirtualManagerPath)
 		if err != nil {
-			glog.Warningf("Can't open %s, error %s", vm.cfg.VirtualManagerPath, err)
+			klog.Warningf("Can't open %s, error %s", vm.cfg.VirtualManagerPath, err)
 			return
 		}
 		defer f.Close()
 
 		names, err := f.Readdirnames(-1)
 		if err != nil {
-			glog.Warningf("Read directory for %s failed, error %s", vm.cfg.VirtualManagerPath, err)
+			klog.Warningf("Read directory for %s failed, error %s", vm.cfg.VirtualManagerPath, err)
 			return
 		}
 
@@ -328,13 +314,13 @@ func (vm *VirtualManager) garbageCollector() {
 
 		for i, name := range names {
 			if _, ok := activePods[name]; !ok {
-				glog.Warningf("Find orphaned pod %s", name)
+				klog.Warningf("Find orphaned pod %s", name)
 				needDeleted = append(needDeleted, names[i])
 			}
 		}
 
 		for _, dir := range needDeleted {
-			glog.V(2).Infof("Remove directory %s", dir)
+			klog.V(2).Infof("Remove directory %s", dir)
 			os.RemoveAll(filepath.Clean(filepath.Join(vm.cfg.VirtualManagerPath, dir)))
 		}
 	}, time.Minute)
@@ -390,7 +376,7 @@ func (vm *VirtualManager) process() {
 			return fmt.Errorf("can't recover vDevice server for %s", dirName)
 		}
 
-		glog.V(2).Infof("Start vDevice server for %s", dirName)
+		klog.V(2).Infof("Start vDevice server for %s", dirName)
 		vm.Lock()
 		vm.vDeviceServers[dirName] = srv
 		vm.Unlock()
@@ -398,16 +384,16 @@ func (vm *VirtualManager) process() {
 		return nil
 	}
 
-	glog.V(2).Infof("Starting process vm events")
+	klog.V(2).Infof("Starting process vm events")
 	for evt := range vm.cfg.VCudaRequestsQueue {
 		podUID := evt.PodUID
-		glog.V(2).Infof("process %s", podUID)
+		klog.V(2).Infof("process %s", podUID)
 		evt.Done <- vcudaConfigFunc(podUID)
 	}
 }
 
 func (vm *VirtualManager) registerVDeviceWithContainerId(podUID, contID string) (*vcudaapi.VDeviceResponse, error) {
-	glog.V(2).Infof("UID: %s, cont: %s want to registration", podUID, contID)
+	klog.V(2).Infof("UID: %s, cont: %s want to registration", podUID, contID)
 	baseDir := filepath.Clean(filepath.Join(vm.cfg.VirtualManagerPath, podUID))
 	pidFilename := filepath.Join(baseDir, contID, PIDS_CONFIG_NAME)
 	configFilename := filepath.Join(baseDir, contID, CONTROLLER_CONFIG_NAME)
@@ -430,7 +416,7 @@ func (vm *VirtualManager) registerVDeviceWithContainerId(podUID, contID string) 
 }
 
 func (vm *VirtualManager) registerVDeviceWithContainerName(podUID, contName string) (*vcudaapi.VDeviceResponse, error) {
-	glog.V(2).Infof("UID: %s, contName: %s want to registration", podUID, contName)
+	klog.V(2).Infof("UID: %s, contName: %s want to registration", podUID, contName)
 	baseDir := filepath.Clean(filepath.Join(vm.cfg.VirtualManagerPath, podUID))
 	pidFilename := filepath.Join(baseDir, contName, PIDS_CONFIG_NAME)
 	configFilename := filepath.Join(baseDir, contName, CONTROLLER_CONFIG_NAME)
@@ -457,7 +443,7 @@ func (vm *VirtualManager) registerVDeviceWithContainerName(podUID, contName stri
 		containerID = strings.TrimPrefix(containerID, "docker://")
 
 		if len(containerID) == 0 {
-			glog.Errorf("can't locate %s(%s)", podUID, contName)
+			klog.Errorf("can't locate %s(%s)", podUID, contName)
 			return false, nil
 		}
 
@@ -493,16 +479,16 @@ func (vm *VirtualManager) RegisterVDevice(ctx context.Context, req *vcudaapi.VDe
 }
 
 func (vm *VirtualManager) writePidFile(filename string, contID string) (string, error) {
-	glog.V(2).Infof("Write %s", filename)
+	klog.V(2).Infof("Write %s", filename)
 	cFileName := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFileName))
 
-	jsonData, err := vm.dockerClient.InspectContainer(contID)
+	containerInfo, err := vm.containerRuntimeManager.InspectContainer(contID)
 	if err != nil {
 		return "", fmt.Errorf("can't find %s from docker", contID)
 	}
 
-	pidsInContainer := vm.procsReader.Read(jsonData.HostConfig.CgroupParent, contID)
+	pidsInContainer := vm.procsReader.Read(containerInfo.CgroupParent, contID)
 	if len(pidsInContainer) == 0 {
 		return "", fmt.Errorf("empty pids")
 	}
@@ -516,7 +502,7 @@ func (vm *VirtualManager) writePidFile(filename string, contID string) (string, 
 		return "", fmt.Errorf("can't sink pids file")
 	}
 
-	return jsonData.Name, nil
+	return containerInfo.Name, nil
 }
 
 func (vm *VirtualManager) writeConfigFile(filename string, podUID, name string) error {
@@ -611,13 +597,13 @@ func runVDeviceServer(dir string, handler vcudaapi.VCUDAServiceServer) *grpc.Ser
 	socketFile := filepath.Join(dir, types.VDeviceSocket)
 	err := syscall.Unlink(socketFile)
 	if err != nil && !os.IsNotExist(err) {
-		glog.Errorf("remove %s failed, error %s", socketFile, err)
+		klog.Errorf("remove %s failed, error %s", socketFile, err)
 		return nil
 	}
 
 	l, err := net.Listen("unix", socketFile)
 	if err != nil {
-		glog.Errorf("listen %s failed, error %s", socketFile, err)
+		klog.Errorf("listen %s failed, error %s", socketFile, err)
 		return nil
 	}
 
@@ -636,7 +622,7 @@ func runVDeviceServer(dir string, handler vcudaapi.VCUDAServiceServer) *grpc.Ser
 
 	select {
 	case err := <-ch:
-		glog.Errorf("start vDevice server failed, error %s", err)
+		klog.Errorf("start vDevice server failed, error %s", err)
 		return nil
 	default:
 	}

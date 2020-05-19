@@ -26,7 +26,7 @@ import (
 	"tkestack.io/gpu-manager/pkg/logs"
 	"tkestack.io/gpu-manager/pkg/utils"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 )
@@ -50,12 +50,12 @@ func main() {
 	defer logs.FlushLogs()
 
 	if len(addr) == 0 || len(podUID) == 0 || (len(contName) == 0 && len(contID) == 0) {
-		glog.Fatalf("argument is empty, current: %s", cmdFlags.Args())
+		klog.Fatalf("argument is empty, current: %s", cmdFlags.Args())
 	}
 
 	conn, err := grpc.Dial(addr, utils.DefaultDialOptions...)
 	if err != nil {
-		glog.Fatalf("can't dial %s, error %v", addr, err)
+		klog.Fatalf("can't dial %s, error %v", addr, err)
 	}
 	defer conn.Close()
 
@@ -75,6 +75,6 @@ func main() {
 
 	_, err = client.RegisterVDevice(ctx, req)
 	if err != nil {
-		glog.Fatalf("fail to get response from manager, error %v", err)
+		klog.Fatalf("fail to get response from manager, error %v", err)
 	}
 }

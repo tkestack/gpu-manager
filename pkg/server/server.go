@@ -30,11 +30,11 @@ import (
 	"syscall"
 	"time"
 
-	"k8s.io/client-go/rest"
-
 	displayapi "tkestack.io/gpu-manager/pkg/api/runtime/display"
 	"tkestack.io/gpu-manager/pkg/config"
 	deviceFactory "tkestack.io/gpu-manager/pkg/device"
+	containerRuntime "tkestack.io/gpu-manager/pkg/runtime"
+	"tkestack.io/gpu-manager/pkg/runtime/docker"
 	allocFactory "tkestack.io/gpu-manager/pkg/services/allocator"
 	// Register allocator controller
 	_ "tkestack.io/gpu-manager/pkg/services/allocator/register"
@@ -46,7 +46,6 @@ import (
 	"tkestack.io/gpu-manager/pkg/utils"
 
 	systemd "github.com/coreos/go-systemd/daemon"
-	"github.com/golang/glog"
 	google_protobuf1 "github.com/golang/protobuf/ptypes/empty"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/prometheus/client_golang/prometheus"
@@ -54,9 +53,10 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
-	"k8s.io/kubernetes/pkg/util/interrupt"
+	"k8s.io/klog"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 type managerImpl struct {
@@ -88,7 +88,7 @@ func (m *managerImpl) Ready() bool {
 	for _, ins := range m.bundleServer {
 		if err := utils.WaitForServer(ins.SocketName()); err == nil {
 			readyServers++
-			glog.V(2).Infof("Server %s is ready, readyServers: %d", ins.SocketName(), readyServers)
+			klog.V(2).Infof("Server %s is ready, readyServers: %d", ins.SocketName(), readyServers)
 			continue
 		}
 
@@ -101,7 +101,7 @@ func (m *managerImpl) Ready() bool {
 // #lizard forgives
 func (m *managerImpl) Run() error {
 	if err := m.validExtraConfig(m.config.ExtraConfigPath); err != nil {
-		glog.Errorf("Can not load extra config, err %s", err)
+		klog.Errorf("Can not load extra config, err %s", err)
 
 		return err
 	}
@@ -113,56 +113,60 @@ func (m *managerImpl) Run() error {
 	if len(m.config.VolumeConfigPath) > 0 {
 		volumeManager, err := volume.NewVolumeManager(m.config.VolumeConfigPath, m.config.EnableShare)
 		if err != nil {
-			glog.Errorf("Can not create volume managerImpl, err %s", err)
+			klog.Errorf("Can not create volume managerImpl, err %s", err)
 			return err
 		}
 
 		if err := volumeManager.Run(); err != nil {
-			glog.Errorf("Can not start volume managerImpl, err %s", err)
+			klog.Errorf("Can not start volume managerImpl, err %s", err)
 			return err
 		}
 	}
 
 	sent, err := systemd.SdNotify(true, "READY=1\n")
 	if err != nil {
-		glog.Errorf("Unable to send systemd daemon successful start message: %v\n", err)
+		klog.Errorf("Unable to send systemd daemon successful start message: %v\n", err)
 	}
 
 	if !sent {
-		glog.Errorf("Unable to set Type=notify in systemd service file?")
+		klog.Errorf("Unable to set Type=notify in systemd service file?")
 	}
 
 	var (
 		client    *kubernetes.Clientset
 		clientCfg *rest.Config
 	)
-	if !m.config.Standalone {
-		if !m.config.InClusterMode {
-			clientCfg, err = clientcmd.BuildConfigFromFlags("", m.config.KubeConfig)
-		} else {
-			clientCfg, err = rest.InClusterConfig()
-		}
 
-		if err != nil {
-			return fmt.Errorf("invalid client config: err(%v)", err)
-		}
-
-		client, err = kubernetes.NewForConfig(clientCfg)
-		if err != nil {
-			return fmt.Errorf("can not generate client from config: error(%v)", err)
-		}
-
-		watchdog.NewPodCache(client.CoreV1())
-		glog.V(2).Infof("Watchdog is running")
-
-		labeler := watchdog.NewNodeLabeler(client.CoreV1(), m.config.Hostname, m.config.NodeLabels)
-		if err := labeler.Run(); err != nil {
-			return err
-		}
-
-		m.virtualManager = vitrual_manager.NewVirtualManager(m.config)
-		m.virtualManager.Run()
+	clientCfg, err = clientcmd.BuildConfigFromFlags("", m.config.KubeConfig)
+	if err != nil {
+		return fmt.Errorf("invalid client config: err(%v)", err)
 	}
+
+	client, err = kubernetes.NewForConfig(clientCfg)
+	if err != nil {
+		return fmt.Errorf("can not generate client from config: error(%v)", err)
+	}
+
+	var runtimeManager containerRuntime.ContainerRuntimeInterface
+
+	switch m.config.ContainerRuntime {
+	case containerRuntime.DockerRuntime:
+		runtimeManager = docker.NewDockerRuntimeManager(m.config.ContainerRuntimeEndpoint)
+	case containerRuntime.CRIORuntime:
+	default:
+		klog.Exitf("Unsupported container runtime: %s", m.config.ContainerRuntime)
+	}
+
+	watchdog.NewPodCache(client, m.config.Hostname)
+	klog.V(2).Infof("Watchdog is running")
+
+	labeler := watchdog.NewNodeLabeler(client.CoreV1(), m.config.Hostname, m.config.NodeLabels)
+	if err := labeler.Run(); err != nil {
+		return err
+	}
+
+	m.virtualManager = vitrual_manager.NewVirtualManager(m.config, runtimeManager)
+	m.virtualManager.Run()
 
 	treeInitFn := deviceFactory.NewFuncForName(m.config.Driver)
 	tree := treeInitFn(m.config)
@@ -176,9 +180,9 @@ func (m *managerImpl) Run() error {
 	}
 
 	m.allocator = initAllocator(m.config, tree, client)
-	m.displayer = display.NewDisplay(m.config, tree)
+	m.displayer = display.NewDisplay(m.config, tree, runtimeManager)
 
-	glog.V(2).Infof("Starting the GRPC server, driver %s, queryPort %d", m.config.Driver, m.config.QueryPort)
+	klog.V(2).Infof("Starting the GRPC server, driver %s, queryPort %d", m.config.Driver, m.config.QueryPort)
 	m.setupGRPCService()
 	mux, err := m.setupGRPCGatewayService()
 	if err != nil {
@@ -188,9 +192,8 @@ func (m *managerImpl) Run() error {
 
 	go func() {
 		displayListenHandler := net.JoinHostPort(m.config.QueryAddr, strconv.Itoa(m.config.QueryPort))
-		h := interrupt.New(nil, m.Stop)
-		if err := h.Run(func() error { return http.ListenAndServe(displayListenHandler, mux) }); err != nil {
-			glog.Fatalf("failed to serve connections: %v", err)
+		if err := http.ListenAndServe(displayListenHandler, mux); err != nil {
+			klog.Fatalf("failed to serve connections: %v", err)
 		}
 	}()
 
@@ -216,7 +219,7 @@ func (m *managerImpl) setupGRPCGatewayService() (*http.ServeMux, error) {
 
 	go func() {
 		if err := displayapi.RegisterGPUDisplayHandlerFromEndpoint(context.Background(), displayMux, types.ManagerSocket, utils.DefaultDialOptions); err != nil {
-			glog.Fatalf("Register display service failed, error %s", err)
+			klog.Fatalf("Register display service failed, error %s", err)
 		}
 	}()
 
@@ -233,7 +236,7 @@ func (m *managerImpl) setupMetricsService(mux *http.ServeMux) {
 
 func (m *managerImpl) runServer() error {
 	for name, srv := range m.bundleServer {
-		glog.V(2).Infof("Server %s is running", name)
+		klog.V(2).Infof("Server %s is running", name)
 		go srv.Run()
 	}
 
@@ -247,18 +250,18 @@ func (m *managerImpl) runServer() error {
 		return err
 	}
 
-	glog.V(2).Infof("Server is ready at %s", types.ManagerSocket)
+	klog.V(2).Infof("Server is ready at %s", types.ManagerSocket)
 
 	return m.srv.Serve(l)
 }
 
 func (m *managerImpl) Stop() {
 	for name, srv := range m.bundleServer {
-		glog.V(2).Infof("Server %s is stopping", name)
+		klog.V(2).Infof("Server %s is stopping", name)
 		srv.Stop()
 	}
 	m.srv.Stop()
-	glog.Fatal("Stop server")
+	klog.Fatal("Stop server")
 }
 
 func (m *managerImpl) validExtraConfig(path string) error {
@@ -331,7 +334,7 @@ func (m *managerImpl) RegisterToKubelet() error {
 			Options:      &pluginapi.DevicePluginOptions{PreStartRequired: true},
 		}
 
-		glog.V(2).Infof("Register to kubelet with endpoint %s", req.Endpoint)
+		klog.V(2).Infof("Register to kubelet with endpoint %s", req.Endpoint)
 		_, err = client.Register(context.Background(), req)
 		if err != nil {
 			return err

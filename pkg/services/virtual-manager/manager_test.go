@@ -29,18 +29,18 @@ import (
 
 	vcudaapi "tkestack.io/gpu-manager/pkg/api/runtime/vcuda"
 	"tkestack.io/gpu-manager/pkg/config"
+	"tkestack.io/gpu-manager/pkg/runtime"
+	fake_runtime "tkestack.io/gpu-manager/pkg/runtime/fake"
 	"tkestack.io/gpu-manager/pkg/services/watchdog"
 	"tkestack.io/gpu-manager/pkg/types"
 	"tkestack.io/gpu-manager/pkg/utils"
 
-	dockercontainer "github.com/docker/docker/api/types/container"
 	"google.golang.org/grpc"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
 )
 
 func init() {
@@ -51,12 +51,13 @@ func init() {
 // #lizard forgives
 func TestVirtualManager(t *testing.T) {
 	flag.Parse()
+	fakeRuntimeManager, _ := fake_runtime.NewFakeRuntimeManager()
+
 	baseDir, _ := ioutil.TempDir("", "vm")
 	virtualManager := NewVirtualManagerForTest(&config.Config{
 		VirtualManagerPath: baseDir,
 		VCudaRequestsQueue: make(chan *types.VCudaRequest, 10),
-	})
-	virtualManager.hostName = "test.com"
+	}, fakeRuntimeManager)
 
 	procsReaderWriter := utils.NewCgroupProcs(baseDir, "")
 	virtualManager.procsReader = procsReaderWriter
@@ -90,7 +91,6 @@ func TestVirtualManager(t *testing.T) {
 			Old:           false,
 			Recover:       false,
 			Pids:          []int{0},
-			NodeName:      virtualManager.hostName,
 		},
 		{
 			PodUID:        "uid-1",
@@ -99,7 +99,6 @@ func TestVirtualManager(t *testing.T) {
 			Old:           false,
 			Recover:       true,
 			Pids:          []int{1},
-			NodeName:      virtualManager.hostName,
 		},
 		{
 			PodUID:        "uid-2",
@@ -108,7 +107,6 @@ func TestVirtualManager(t *testing.T) {
 			Old:           true,
 			Recover:       false,
 			Pids:          []int{2},
-			NodeName:      virtualManager.hostName,
 		},
 		{
 			PodUID:        "uid-3",
@@ -121,21 +119,16 @@ func TestVirtualManager(t *testing.T) {
 		},
 	}
 
-	fakeDockerClient := virtualManager.dockerClient.(*libdocker.FakeDockerClient)
-	fakeRunningContainers := make([]*libdocker.FakeContainer, len(testCases))
 	for i, cs := range testCases {
-		fakeRunningContainers[i] = &libdocker.FakeContainer{
-			ID:   cs.ContainerID,
-			Name: cs.ContainerName,
-			HostConfig: &dockercontainer.HostConfig{
-				Resources: dockercontainer.Resources{
-					CgroupParent: "/" + cs.PodUID,
-				},
-			},
+		fakeRunningContainers := &runtime.ContainerInfo{
+			ID:           cs.ContainerID,
+			Name:         cs.ContainerName,
+			CgroupParent: "/" + cs.PodUID,
 		}
 		if !cs.Old {
-			fakeRunningContainers[i].Name = utils.MakeContainerNamePrefix(cs.ContainerName)
+			fakeRunningContainers.Name = utils.MakeContainerNamePrefix(cs.ContainerName)
 		}
+		fakeRuntimeManager.Containers[fakeRunningContainers.ID] = fakeRunningContainers
 
 		fakePod := &v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -190,7 +183,6 @@ func TestVirtualManager(t *testing.T) {
 			t.Errorf("procs: can't write pod %s, cont: %s, %v", cs.PodUID, cs.ContainerName, err)
 		}
 	}
-	fakeDockerClient.SetFakeRunningContainers(fakeRunningContainers)
 
 	virtualManager.Run()
 
@@ -205,9 +197,7 @@ func TestVirtualManager(t *testing.T) {
 			}
 
 			if _, err := os.Stat(filepath.Join(dirName, types.VDeviceSocket)); err != nil {
-				if cs.NodeName == virtualManager.hostName {
-					t.Errorf("can't stat %s socket file, %v", cs.PodUID, err)
-				}
+				t.Errorf("can't stat %s socket file, %v", cs.PodUID, err)
 			}
 		}
 	}
@@ -232,10 +222,6 @@ func TestVirtualManager(t *testing.T) {
 
 	t.Logf("Test register")
 	for _, cs := range testCases {
-		if cs.NodeName != virtualManager.hostName {
-			continue
-		}
-
 		socketName := ""
 		request := &vcudaapi.VDeviceRequest{
 			PodUid: cs.PodUID,

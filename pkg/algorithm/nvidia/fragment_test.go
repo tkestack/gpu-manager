@@ -30,7 +30,6 @@ func init() {
 }
 
 func TestFragment(t *testing.T) {
-	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	obj := nvidia.NewNvidiaTree(nil)
 	tree, _ := obj.(*nvidia.NvidiaTree)
@@ -75,7 +74,6 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 }
 
 func TestFragmentOnlyOne(t *testing.T) {
-	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	obj := nvidia.NewNvidiaTree(nil)
 	tree, _ := obj.(*nvidia.NvidiaTree)

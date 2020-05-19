@@ -24,9 +24,9 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"google.golang.org/grpc"
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 	"tkestack.io/gpu-manager/pkg/types"
 )
 
@@ -77,14 +77,14 @@ func (vr *vmemoryResourceServer) Run() error {
 		return err
 	}
 
-	glog.V(2).Infof("Server %s is ready at %s", types.VMemoryAnnotation, vr.socketFile)
+	klog.V(2).Infof("Server %s is ready at %s", types.VMemoryAnnotation, vr.socketFile)
 
 	return vr.srv.Serve(l)
 }
 
 /** device plugin interface */
 func (vr *vmemoryResourceServer) Allocate(ctx context.Context, reqs *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
-	glog.V(2).Infof("%+v allocation request for vmemory", reqs)
+	klog.V(2).Infof("%+v allocation request for vmemory", reqs)
 	fakeData := make([]*pluginapi.ContainerAllocateResponse, 0)
 	fakeData = append(fakeData, &pluginapi.ContainerAllocateResponse{})
 
@@ -94,16 +94,16 @@ func (vr *vmemoryResourceServer) Allocate(ctx context.Context, reqs *pluginapi.A
 }
 
 func (vr *vmemoryResourceServer) ListAndWatch(e *pluginapi.Empty, s pluginapi.DevicePlugin_ListAndWatchServer) error {
-	glog.V(2).Infof("ListAndWatch request for vmemory")
+	klog.V(2).Infof("ListAndWatch request for vmemory")
 	return vr.mgr.ListAndWatchWithResourceName(types.VMemoryAnnotation, e, s)
 }
 
 func (vr *vmemoryResourceServer) GetDevicePluginOptions(ctx context.Context, e *pluginapi.Empty) (*pluginapi.DevicePluginOptions, error) {
-	glog.V(2).Infof("GetDevicePluginOptions request for vmemory")
+	klog.V(2).Infof("GetDevicePluginOptions request for vmemory")
 	return &pluginapi.DevicePluginOptions{}, nil
 }
 
 func (vr *vmemoryResourceServer) PreStartContainer(ctx context.Context, req *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
-	glog.V(2).Infof("PreStartContainer request for vmemory")
+	klog.V(2).Infof("PreStartContainer request for vmemory")
 	return &pluginapi.PreStartContainerResponse{}, nil
 }

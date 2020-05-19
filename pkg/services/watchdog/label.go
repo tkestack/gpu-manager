@@ -22,7 +22,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -51,7 +51,7 @@ var modelFn = modelFunc{}
 
 func (m modelFunc) GetLabel() (model string) {
 	if err := nvml.Init(); err != nil {
-		glog.Warningf("Can't initialize nvml library, %v", err)
+		klog.Warningf("Can't initialize nvml library, %v", err)
 		return
 	}
 
@@ -60,17 +60,17 @@ func (m modelFunc) GetLabel() (model string) {
 	// Assume all devices on this node are the same model
 	dev, err := nvml.DeviceGetHandleByIndex(0)
 	if err != nil {
-		glog.Warningf("Can't get device 0 information, %v", err)
+		klog.Warningf("Can't get device 0 information, %v", err)
 		return
 	}
 
 	rawName, err := dev.DeviceGetName()
 	if err != nil {
-		glog.Warningf("Can't get device name, %v", err)
+		klog.Warningf("Can't get device name, %v", err)
 		return
 	}
 
-	glog.V(4).Infof("GPU name: %s", rawName)
+	klog.V(4).Infof("GPU name: %s", rawName)
 
 	return getTypeName(rawName)
 }
@@ -88,7 +88,7 @@ func getTypeName(name string) string {
 		return splits[1]
 	}
 
-	glog.V(4).Infof("GPU name splits: %v", splits)
+	klog.V(4).Infof("GPU name splits: %v", splits)
 
 	return ""
 }
@@ -99,7 +99,7 @@ func NewNodeLabeler(client v1core.CoreV1Interface, hostname string, labels map[s
 		hostname, _ = os.Hostname()
 	}
 
-	glog.V(2).Infof("Labeler for hostname %s", hostname)
+	klog.V(2).Infof("Labeler for hostname %s", hostname)
 
 	labelMapper := make(map[string]labelFunc)
 	for k, v := range labels {
@@ -127,11 +127,11 @@ func (nl *nodeLabeler) Run() error {
 		for k, fn := range nl.labelMapper {
 			l := fn.GetLabel()
 			if len(l) == 0 {
-				glog.Warningf("Empty label for %s", k)
+				klog.Warningf("Empty label for %s", k)
 				continue
 			}
 
-			glog.V(2).Infof("Label %s %s=%s", nl.hostName, k, l)
+			klog.V(2).Infof("Label %s %s=%s", nl.hostName, k, l)
 			node.Labels[k] = l
 		}
 
@@ -150,7 +150,7 @@ func (nl *nodeLabeler) Run() error {
 		return err
 	}
 
-	glog.V(2).Infof("Auto label is running")
+	klog.V(2).Infof("Auto label is running")
 
 	return nil
 }

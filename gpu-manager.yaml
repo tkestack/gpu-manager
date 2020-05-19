@@ -62,8 +62,6 @@ spec:
           env:
             - name: LOG_LEVEL
               value: "4"
-            - name: EXTRA_FLAGS
-              value: "--incluster-mode=true"
             - name: NODE_NAME
               valueFrom:
                 fieldRef:

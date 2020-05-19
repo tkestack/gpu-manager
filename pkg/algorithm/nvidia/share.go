@@ -20,7 +20,7 @@ package nvidia
 import (
 	"sort"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 
 	"tkestack.io/gpu-manager/pkg/device/nvidia"
 )
@@ -55,7 +55,7 @@ func (al *shareMode) Evaluate(cores int64, memory int64) []*nvidia.NvidiaNode {
 
 	for _, node := range tmpStore {
 		if node.AllocatableMeta.Cores >= cores && node.AllocatableMeta.Memory >= memory {
-			glog.V(2).Infof("Pick up %d mask %b, cores: %d, memory: %d", node.Meta.ID, node.Mask, node.AllocatableMeta.Cores, node.AllocatableMeta.Memory)
+			klog.V(2).Infof("Pick up %d mask %b, cores: %d, memory: %d", node.Meta.ID, node.Mask, node.AllocatableMeta.Cores, node.AllocatableMeta.Memory)
 			nodes = append(nodes, node)
 			break
 		}

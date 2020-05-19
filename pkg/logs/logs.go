@@ -21,65 +21,65 @@ import (
 	"log"
 	"time"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"google.golang.org/grpc/grpclog"
 )
 
-// GlogWriter serves as a bridge between the standard log package and the glog package.
-type GlogWriter struct{}
+// klogWriter serves as a bridge between the standard log package and the klog package.
+type klogWriter struct{}
 
 // Write implements the io.Writer interface.
-func (gw GlogWriter) Write(data []byte) (n int, err error) {
-	glog.Info(string(data))
+func (gw klogWriter) Write(data []byte) (n int, err error) {
+	klog.Info(string(data))
 	return len(data), nil
 }
 
 // InitLogs initializes logs the way we want for kubernetes.
 func InitLogs() {
-	logger := GlogWriter{}
+	logger := klogWriter{}
 	log.SetOutput(logger)
 	log.SetFlags(0)
 
 	grpclog.SetLogger(logger)
-	// The default glog flush interval is 30 seconds, which is frighteningly long.
+	// The default klog flush interval is 30 seconds, which is frighteningly long.
 	go func() {
 		for range time.Tick(time.Second) {
-			glog.Flush()
+			klog.Flush()
 		}
 	}()
 }
 
-//FlushLogs calls glog.Flush to flush all pending log I/O
+//FlushLogs calls klog.Flush to flush all pending log I/O
 func FlushLogs() {
-	glog.Flush()
+	klog.Flush()
 }
 
-//Fatal wraps glog.FatalDepth
-func (gw GlogWriter) Fatal(args ...interface{}) {
-	glog.FatalDepth(1, args...)
+//Fatal wraps klog.FatalDepth
+func (gw klogWriter) Fatal(args ...interface{}) {
+	klog.FatalDepth(1, args...)
 }
 
-//Fatalf wraps glog.Fatalf
-func (gw GlogWriter) Fatalf(format string, args ...interface{}) {
-	glog.Fatalf(format, args...)
+//Fatalf wraps klog.Fatalf
+func (gw klogWriter) Fatalf(format string, args ...interface{}) {
+	klog.Fatalf(format, args...)
 }
 
-//Fatalln wraps glog.Fatalln
-func (gw GlogWriter) Fatalln(args ...interface{}) {
-	glog.Fatalln(args...)
+//Fatalln wraps klog.Fatalln
+func (gw klogWriter) Fatalln(args ...interface{}) {
+	klog.Fatalln(args...)
 }
 
-//Print wraps glog.InfoDepth
-func (gw GlogWriter) Print(args ...interface{}) {
-	glog.InfoDepth(1, args...)
+//Print wraps klog.InfoDepth
+func (gw klogWriter) Print(args ...interface{}) {
+	klog.InfoDepth(1, args...)
 }
 
-//Printf wraps glog.V(2).Infof
-func (gw GlogWriter) Printf(format string, args ...interface{}) {
-	glog.V(2).Infof(format, args...)
+//Printf wraps klog.V(2).Infof
+func (gw klogWriter) Printf(format string, args ...interface{}) {
+	klog.V(2).Infof(format, args...)
 }
 
-//Println wraps glog.Info
-func (gw GlogWriter) Println(args ...interface{}) {
-	glog.Info(args...)
+//Println wraps klog.Info
+func (gw klogWriter) Println(args ...interface{}) {
+	klog.Info(args...)
 }

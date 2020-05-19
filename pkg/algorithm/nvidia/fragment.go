@@ -20,7 +20,7 @@ package nvidia
 import (
 	"sort"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 
 	"tkestack.io/gpu-manager/pkg/device/nvidia"
 )
@@ -60,7 +60,7 @@ func (al *fragmentMode) Evaluate(cores int64, _ int64) []*nvidia.NvidiaNode {
 			}
 
 			candidate = node
-			glog.V(2).Infof("Choose id %d, mask %b", candidate.Meta.ID, candidate.Mask)
+			klog.V(2).Infof("Choose id %d, mask %b", candidate.Meta.ID, candidate.Mask)
 			break
 		}
 	}
@@ -70,7 +70,7 @@ func (al *fragmentMode) Evaluate(cores int64, _ int64) []*nvidia.NvidiaNode {
 			break
 		}
 
-		glog.V(2).Infof("Pick up %d mask %b", n.Meta.ID, n.Mask)
+		klog.V(2).Infof("Pick up %d mask %b", n.Meta.ID, n.Mask)
 		nodes = append(nodes, n)
 		num--
 	}

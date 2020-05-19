@@ -20,7 +20,6 @@ package display
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -30,16 +29,16 @@ import (
 	"tkestack.io/gpu-manager/pkg/config"
 	"tkestack.io/gpu-manager/pkg/device"
 	nvtree "tkestack.io/gpu-manager/pkg/device/nvidia"
+	"tkestack.io/gpu-manager/pkg/runtime"
 	"tkestack.io/gpu-manager/pkg/services/watchdog"
 	"tkestack.io/gpu-manager/pkg/types"
 	"tkestack.io/gpu-manager/pkg/utils"
 	"tkestack.io/gpu-manager/pkg/version"
 
-	"github.com/golang/glog"
 	google_protobuf1 "github.com/golang/protobuf/ptypes/empty"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/api/core/v1"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
+	"k8s.io/klog"
 	"tkestack.io/nvml"
 )
 
@@ -47,38 +46,29 @@ import (
 type Display struct {
 	sync.Mutex
 
-	config       *config.Config
-	tree         *nvtree.NvidiaTree
-	dockerClient libdocker.Interface
-	hostName     string
-	procsReader  utils.CgroupProcsReader
+	config                  *config.Config
+	tree                    *nvtree.NvidiaTree
+	containerRuntimeManager runtime.ContainerRuntimeInterface
+	hostName                string
+	procsReader             utils.CgroupProcsReader
 }
 
 var _ displayapi.GPUDisplayServer = &Display{}
 var _ prometheus.Collector = &Display{}
 
 //NewDisplay returns a new Display
-func NewDisplay(config *config.Config, tree device.GPUTree) *Display {
-	_tree, _ := tree.(*nvtree.NvidiaTree)
-
-	var hostname string
-	if len(config.Hostname) == 0 {
-		hostname, _ = os.Hostname()
-	} else {
-		hostname = config.Hostname
-	}
-
-	dockerClient := utils.CreateDockerClient(config.DockerEndpoint)
-	info, err := dockerClient.Info()
+func NewDisplay(config *config.Config, tree device.GPUTree, runtimeManager runtime.ContainerRuntimeInterface) *Display {
+	cgroupDriver, err := runtimeManager.CgroupDriver()
 	if err != nil {
-		glog.Fatalf("Cant't get docker info: %v", err)
+		klog.Fatalf("Cant't get docker info: %v", err)
+		return nil
 	}
+	_tree, _ := tree.(*nvtree.NvidiaTree)
 	return &Display{
-		tree:         _tree,
-		config:       config,
-		dockerClient: dockerClient,
-		hostName:     hostname,
-		procsReader:  utils.NewCgroupProcs(types.CGROUP_BASE, info.CgroupDriver),
+		tree:                    _tree,
+		config:                  config,
+		containerRuntimeManager: runtimeManager,
+		procsReader:             utils.NewCgroupProcs(types.CGROUP_BASE, cgroupDriver),
 	}
 }
 
@@ -153,14 +143,14 @@ func (disp *Display) getPodUsage(pod *v1.Pod) map[string]*displayapi.Devices {
 			continue
 		}
 
-		jsonData, err := disp.dockerClient.InspectContainer(contID)
+		containerInfo, err := disp.containerRuntimeManager.InspectContainer(contID)
 		if err != nil {
-			glog.Warningf("can't find %s from docker", contID)
+			klog.Warningf("can't find %s from docker", contID)
 			continue
 		}
 
-		pidsInContainer := disp.procsReader.Read(jsonData.HostConfig.CgroupParent, contID)
-		_, _, deviceNames := utils.GetGPUData(jsonData.Config.Labels)
+		pidsInContainer := disp.procsReader.Read(containerInfo.CgroupParent, contID)
+		_, _, deviceNames := utils.GetGPUData(containerInfo.Labels)
 		devicesUsage := make([]*displayapi.DeviceInfo, 0)
 		for _, deviceName := range deviceNames {
 			if utils.IsValidGPUPath(deviceName) {
@@ -196,25 +186,25 @@ func (disp *Display) getDeviceUsage(pidsInCont []int, deviceIdx int) *displayapi
 
 	dev, err := nvml.DeviceGetHandleByIndex(uint(deviceIdx))
 	if err != nil {
-		glog.Warningf("can't find device %d, error %s", deviceIdx, err)
+		klog.Warningf("can't find device %d, error %s", deviceIdx, err)
 		return nil
 	}
 
 	processSamples, err := dev.DeviceGetProcessUtilization(1024, time.Second)
 	if err != nil {
-		glog.Warningf("can't get processes utilization from device %d, error %s", deviceIdx, err)
+		klog.Warningf("can't get processes utilization from device %d, error %s", deviceIdx, err)
 		return nil
 	}
 
 	processOnDevices, err := dev.DeviceGetComputeRunningProcesses(1024)
 	if err != nil {
-		glog.Warningf("can't get processes info from device %d, error %s", deviceIdx, err)
+		klog.Warningf("can't get processes info from device %d, error %s", deviceIdx, err)
 		return nil
 	}
 
 	busID, err := dev.DeviceGetPciInfo()
 	if err != nil {
-		glog.Warningf("can't get pci info from device %d, error %s", deviceIdx, err)
+		klog.Warningf("can't get pci info from device %d, error %s", deviceIdx, err)
 		return nil
 	}
 

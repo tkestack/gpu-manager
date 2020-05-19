@@ -28,9 +28,9 @@ import (
 	_ "tkestack.io/gpu-manager/pkg/device/dummy"
 	"tkestack.io/gpu-manager/pkg/services/allocator"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 	"k8s.io/client-go/kubernetes"
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 func init() {
@@ -88,7 +88,7 @@ func (ta *DummyAllocator) ListAndWatchWithResourceName(resourceName string, e *p
 		time.Sleep(time.Second)
 	}
 
-	glog.V(2).Infof("ListAndWatch %s exit", resourceName)
+	klog.V(2).Infof("ListAndWatch %s exit", resourceName)
 
 	return nil
 }

@@ -30,7 +30,7 @@ import (
 	"tkestack.io/gpu-manager/pkg/services/volume/ldcache"
 	"tkestack.io/gpu-manager/pkg/types"
 
-	"github.com/golang/glog"
+	"k8s.io/klog"
 )
 
 //VolumeManager manages volumes used by containers running GPU application
@@ -130,13 +130,13 @@ func (vm *VolumeManager) Run() (err error) {
 					return err
 				}
 
-				glog.V(2).Infof("Find binaries: %+v", bins)
+				klog.V(2).Infof("Find binaries: %+v", bins)
 
 				vol.dirs = append(vol.dirs, volumeDir{binDir, bins})
 			case "libraries":
 				libs32, libs64 := cache.Lookup(c...)
-				glog.V(2).Infof("Find 32bit libraries: %+v", libs32)
-				glog.V(2).Infof("Find 64bit libraries: %+v", libs64)
+				klog.V(2).Infof("Find 32bit libraries: %+v", libs32)
+				klog.V(2).Infof("Find 64bit libraries: %+v", libs64)
 
 				vol.dirs = append(vol.dirs, volumeDir{lib32Dir, libs32}, volumeDir{lib64Dir, libs64})
 			}
@@ -149,7 +149,7 @@ func (vm *VolumeManager) Run() (err error) {
 		return err
 	}
 
-	glog.V(2).Infof("Volume manager is running")
+	klog.V(2).Infof("Volume manager is running")
 
 	return nil
 }
@@ -173,7 +173,7 @@ func (vm *VolumeManager) mirror(vols VolumeMap) error {
 			// of it inside the volume directory. We also need to create soname symlinks similar to what
 			// ldconfig does since our volume will only show up at runtime.
 			for _, f := range d.files {
-				glog.V(2).Infof("Mirror %s to %s", f, vpath)
+				klog.V(2).Infof("Mirror %s to %s", f, vpath)
 				if err := vm.mirrorFiles(driver, vpath, f); err != nil {
 					return err
 				}
@@ -182,7 +182,7 @@ func (vm *VolumeManager) mirror(vols VolumeMap) error {
 					driverStr := strings.SplitN(strings.TrimPrefix(path.Base(f), "libcuda.so."), ".", 2)
 					types.DriverVersionMajor, _ = strconv.Atoi(driverStr[0])
 					types.DriverVersionMinor, _ = strconv.Atoi(driverStr[1])
-					glog.V(2).Infof("Driver version: %d.%d", types.DriverVersionMajor, types.DriverVersionMinor)
+					klog.V(2).Infof("Driver version: %d.%d", types.DriverVersionMajor, types.DriverVersionMinor)
 				}
 
 				if strings.HasPrefix(path.Base(f), "libcuda-control.so") {
@@ -202,7 +202,7 @@ func (vm *VolumeManager) mirror(vols VolumeMap) error {
 			return err
 		}
 
-		glog.V(2).Infof("Vcuda %s to %s", vm.cudaControlFile, soFile)
+		klog.V(2).Infof("Vcuda %s to %s", vm.cudaControlFile, soFile)
 
 		l := strings.TrimRight(soFile, ".0123456789")
 		if err := os.Remove(l); err != nil {
@@ -213,7 +213,7 @@ func (vm *VolumeManager) mirror(vols VolumeMap) error {
 		if err := clone(vm.cudaControlFile, l); err != nil {
 			return err
 		}
-		glog.V(2).Infof("Vcuda %s to %s", vm.cudaControlFile, l)
+		klog.V(2).Infof("Vcuda %s to %s", vm.cudaControlFile, l)
 		return nil
 	}
 

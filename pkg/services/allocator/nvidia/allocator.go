@@ -40,8 +40,6 @@ import (
 	"tkestack.io/gpu-manager/pkg/types"
 	"tkestack.io/gpu-manager/pkg/utils"
 
-	dockertypes "github.com/docker/docker/api/types"
-	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -52,10 +50,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/workqueue"
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim"
-	"k8s.io/kubernetes/pkg/kubelet/dockershim/libdocker"
-	klettypes "k8s.io/kubernetes/pkg/kubelet/types"
+	"k8s.io/klog"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 const (
@@ -77,7 +73,6 @@ type NvidiaTopoAllocator struct {
 	config            *config.Config
 	evaluators        map[string]Evaluator
 	extraConfig       map[string]*config.ExtraConfig
-	dockerClient      libdocker.Interface
 	k8sClient         kubernetes.Interface
 	unfinishedPod     *v1.Pod
 	queue             workqueue.RateLimitingInterface
@@ -106,24 +101,15 @@ var (
 
 //NewNvidiaTopoAllocator returns a new NvidiaTopoAllocator
 func NewNvidiaTopoAllocator(config *config.Config, tree device.GPUTree, k8sClient kubernetes.Interface) allocator.GPUTopoService {
-	runtimeRequestTimeout := metav1.Duration{Duration: 2 * time.Minute}
-	imagePullProgressDeadline := metav1.Duration{Duration: 1 * time.Minute}
-	dockerClientConfig := &dockershim.ClientConfig{
-		DockerEndpoint:            config.DockerEndpoint,
-		RuntimeRequestTimeout:     runtimeRequestTimeout.Duration,
-		ImagePullProgressDeadline: imagePullProgressDeadline.Duration,
-	}
-
 	_tree, _ := tree.(*nvtree.NvidiaTree)
 	cm, err := checkpoint.NewManager(config.CheckpointPath, checkpointFileName)
 	if err != nil {
-		glog.Fatalf("Failed to create checkpoint manager due to %s", err.Error())
+		klog.Fatalf("Failed to create checkpoint manager due to %s", err.Error())
 	}
 	alloc := &NvidiaTopoAllocator{
 		tree:              _tree,
 		config:            config,
 		evaluators:        make(map[string]Evaluator),
-		dockerClient:      dockershim.NewDockerClientFromConfig(dockerClientConfig),
 		allocatedPod:      cache.NewAllocateCache(),
 		k8sClient:         k8sClient,
 		queue:             workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
@@ -158,14 +144,12 @@ func NewNvidiaTopoAllocatorForTest(config *config.Config, tree device.GPUTree, k
 	_tree, _ := tree.(*nvtree.NvidiaTree)
 	cm, err := checkpoint.NewManager("/tmp", checkpointFileName)
 	if err != nil {
-		glog.Fatalf("Failed to create checkpoint manager due to %s", err.Error())
+		klog.Fatalf("Failed to create checkpoint manager due to %s", err.Error())
 	}
-	cm.Delete()
 	alloc := &NvidiaTopoAllocator{
 		tree:              _tree,
 		config:            config,
 		evaluators:        make(map[string]Evaluator),
-		dockerClient:      libdocker.NewFakeDockerClient(),
 		allocatedPod:      cache.NewAllocateCache(),
 		k8sClient:         k8sClient,
 		stopChan:          make(chan struct{}),
@@ -192,108 +176,35 @@ func (ta *NvidiaTopoAllocator) recoverInUsed() {
 	// Read and unmarshal data from checkpoint to allocatedPod before recover from docker
 	ta.readCheckpoint()
 
-	opt := dockertypes.ContainerListOptions{All: true}
+	// Recover device tree by reading checkpoint file
+	for uid, containerToInfo := range ta.allocatedPod.PodGPUMapping {
+		for cName, cache := range containerToInfo {
+			for _, dev := range cache.Devices {
+				if utils.IsValidGPUPath(dev) {
+					klog.V(2).Infof("Nvidia GPU %q is in use by container: %q", dev, cName)
+					klog.V(2).Infof("Uid: %s, Name: %s, util: %d, memory: %d", uid, cName, cache.Cores, cache.Memory)
 
-	containers, err := ta.dockerClient.ListContainers(opt)
-	if err != nil {
-		glog.Fatalf("Failed to list containers, err %s", err)
-		return
-	}
-
-	glog.V(2).Infof("Found %d containers", len(containers))
-
-	sort.Slice(containers, func(i, j int) bool {
-		return containers[i].Created < containers[j].Created
-	})
-
-	usageMapData := make(map[int]int64, 0)
-	allRunningPods := watchdog.GetActivePods()
-	for _, baseJSON := range containers {
-		glog.V(2).Infof("Start to process %s", baseJSON.ID)
-		if baseJSON.Labels != nil {
-			cName, cok := baseJSON.Labels[klettypes.KubernetesContainerNameLabel]
-			pUID, pok := baseJSON.Labels[klettypes.KubernetesPodUIDLabel]
-
-			if !(cok && pok) {
-				glog.V(2).Infof("%s Missing important label", baseJSON.ID)
-				continue
-			}
-
-			// Because of List interface, we should retrieve detail information by calling InspectContainer
-			jsonData, err := ta.dockerClient.InspectContainer(baseJSON.ID)
-			if err != nil {
-				glog.Fatalf("Can't inspect container %s", baseJSON.ID)
-				continue
-			}
-
-			devices := jsonData.HostConfig.Devices
-			if devices == nil {
-				glog.V(2).Infof("%s No devices", baseJSON.ID)
-				continue
-			}
-
-			_, found := allRunningPods[pUID]
-
-			if !found {
-				glog.V(2).Infof("%s(%s) State is not match", pUID, baseJSON.ID)
-				continue
-			}
-
-			if cacheItem := ta.allocatedPod.GetCache(pUID); cacheItem != nil {
-				info, ok := cacheItem[cName]
-				if ok {
-					glog.V(2).Infof("%s(%s) has allocated device %+v", pUID, baseJSON.ID, info.Devices)
-					continue
-				}
-			}
-
-			gpuUtil, gpuMemory, _ := utils.GetGPUData(jsonData.Config.Labels)
-			recoverDevices := sets.NewString()
-
-			for _, dev := range devices {
-				if utils.IsValidGPUPath(dev.PathOnHost) {
-					glog.V(2).Infof("Nvidia GPU %q is in use by Docker Container: %q", dev.PathOnHost, jsonData.ID)
-					glog.V(2).Infof("Uid: %s, Name: %s, util: %d, memory: %d", pUID, cName, gpuUtil, gpuMemory)
-
-					id, _ := utils.GetGPUMinorID(dev.PathOnHost)
+					id, _ := utils.GetGPUMinorID(dev)
 					ta.tree.MarkOccupied(&nvtree.NvidiaNode{
 						Meta: nvtree.DeviceMeta{
 							MinorID: id,
 						},
-					}, gpuUtil, gpuMemory)
-					recoverDevices.Insert(dev.PathOnHost)
-					if gpuUtil >= nvtree.HundredCore {
-						usageMapData[id] += nvtree.HundredCore
-					} else {
-						usageMapData[id] += gpuUtil
-					}
+					}, cache.Cores, cache.Memory)
 				}
 			}
-
-			ta.allocatedPod.Insert(pUID, cName, &cache.Info{
-				Devices: recoverDevices.UnsortedList(),
-				Cores:   gpuUtil,
-				Memory:  gpuMemory,
-			})
 		}
 	}
 
-	for id, usage := range usageMapData {
-		glog.V(2).Infof("%d %d", id, usage)
-		if usage > nvtree.HundredCore {
-			glog.Fatalf("Allocation has conflict: %d %d\n", id, usage)
-		}
-	}
-
+	ta.recycle()
 	ta.writeCheckpoint()
 	ta.checkAllocation()
 }
 
 func (ta *NvidiaTopoAllocator) checkAllocation() {
-	glog.V(4).Infof("Chekcing allocation of pods on this node")
+	klog.V(4).Infof("Checking allocation of pods on this node")
 	pods, err := getPodsOnNode(ta.k8sClient, ta.config.Hostname, "")
 	if err != nil {
-		glog.Infof("Failed to get pods on node due to %v", err)
+		klog.Infof("Failed to get pods on node due to %v", err)
 		return
 	}
 
@@ -309,7 +220,7 @@ func (ta *NvidiaTopoAllocator) checkAllocation() {
 		case v1.PodRunning:
 			annotaionMap, err := ta.getReadyAnnotations(&pods[i], true)
 			if err != nil {
-				glog.Infof("failed to get ready annotations for pod %s", p.UID)
+				klog.Infof("failed to get ready annotations for pod %s", p.UID)
 				continue
 			}
 			pass := true
@@ -349,18 +260,18 @@ func (ta *NvidiaTopoAllocator) checkAllocationPeriodically(quit chan struct{}) {
 
 func (ta *NvidiaTopoAllocator) loadExtraConfig(path string) {
 	if path != "" {
-		glog.V(2).Infof("Load extra config from %s", path)
+		klog.V(2).Infof("Load extra config from %s", path)
 
 		f, err := os.Open(path)
 		if err != nil {
-			glog.Fatalf("Can not load extra config at %s, err %s", path, err)
+			klog.Fatalf("Can not load extra config at %s, err %s", path, err)
 		}
 
 		defer f.Close()
 
 		cfg := make(map[string]*config.ExtraConfig)
 		if err := json.NewDecoder(f).Decode(&cfg); err != nil {
-			glog.Fatalf("Can not unmarshal extra config, err %s", err)
+			klog.Fatalf("Can not unmarshal extra config, err %s", err)
 		}
 
 		ta.extraConfig = cfg
@@ -376,13 +287,13 @@ func (ta *NvidiaTopoAllocator) initEvaluator(tree *nvtree.NvidiaTree) {
 func (ta *NvidiaTopoAllocator) loadModule() {
 	if _, err := os.Stat(types.NvidiaCtlDevice); err != nil {
 		if out, err := exec.Command("modprobe", "-va", "nvidia-uvm", "nvidia").CombinedOutput(); err != nil {
-			glog.V(3).Infof("Running modprobe nvidia-uvm nvidia failed with message: %s, error: %v", out, err)
+			klog.V(3).Infof("Running modprobe nvidia-uvm nvidia failed with message: %s, error: %v", out, err)
 		}
 	}
 
 	if _, err := os.Stat(types.NvidiaUVMDevice); err != nil {
 		if out, err := exec.Command("modprobe", "-va", "nvidia-uvm", "nvidia").CombinedOutput(); err != nil {
-			glog.V(3).Infof("Running modprobe nvidia-uvm nvidia failed with message: %s, error: %v", out, err)
+			klog.V(3).Infof("Running modprobe nvidia-uvm nvidia failed with message: %s, error: %v", out, err)
 		}
 	}
 }
@@ -442,7 +353,7 @@ func (ta *NvidiaTopoAllocator) allocateOne(pod *v1.Pod, container *v1.Container,
 	}
 
 	if needCores == 0 && needMemoryBlocks == 0 {
-		glog.Warningf("Zero request")
+		klog.Warningf("Zero request")
 		return nil, nil
 	}
 
@@ -458,13 +369,13 @@ func (ta *NvidiaTopoAllocator) allocateOne(pod *v1.Pod, container *v1.Container,
 		if c, ok := podCache[container.Name]; ok {
 			allocated = true
 			containerCache = c
-			glog.V(2).Infof("container %s of pod %s has already been allocated, the allcation will be skip", container.Name, pod.UID)
+			klog.V(2).Infof("container %s of pod %s has already been allocated, the allcation will be skip", container.Name, pod.UID)
 		}
 	}
-	glog.V(2).Infof("Tree graph: %s", ta.tree.PrintGraph())
+	klog.V(2).Infof("Tree graph: %s", ta.tree.PrintGraph())
 
 	if allocated {
-		glog.V(2).Infof("container %s of pod %s has already been allocated, get devices from cached instead", container.Name, pod.UID)
+		klog.V(2).Infof("container %s of pod %s has already been allocated, get devices from cached instead", container.Name, pod.UID)
 		for _, d := range containerCache.Devices {
 			node := ta.tree.Query(d)
 			if node != nil {
@@ -472,7 +383,7 @@ func (ta *NvidiaTopoAllocator) allocateOne(pod *v1.Pod, container *v1.Container,
 			}
 		}
 	} else {
-		glog.V(2).Infof("Try allocate for %s(%s), vcore %d, vmemory %d", pod.UID, container.Name, needCores, needMemory)
+		klog.V(2).Infof("Try allocate for %s(%s), vcore %d, vmemory %d", pod.UID, container.Name, needCores, needMemory)
 
 		switch {
 		case needCores > nvtree.HundredCore:
@@ -565,7 +476,7 @@ func (ta *NvidiaTopoAllocator) allocateOne(pod *v1.Pod, container *v1.Container,
 	deviceList := make([]string, 0)
 	for _, n := range nodes {
 		name := n.MinorName()
-		glog.V(2).Infof("Allocate %s for %s(%s), Meta (%d:%d)", name, pod.UID, container.Name, n.Meta.ID, n.Meta.MinorID)
+		klog.V(2).Infof("Allocate %s for %s(%s), Meta (%d:%d)", name, pod.UID, container.Name, n.Meta.ID, n.Meta.MinorID)
 
 		ctntResp.Annotations[types.VCoreAnnotation] = fmt.Sprintf("%d", needCores)
 		ctntResp.Annotations[types.VMemoryAnnotation] = fmt.Sprintf("%d", needMemory)
@@ -704,7 +615,7 @@ func (ta *NvidiaTopoAllocator) recycle() {
 
 	podsToBeRemoved := lastActivePodUids.Difference(activePodUids)
 
-	glog.V(5).Infof("Pods to be removed: %v", podsToBeRemoved.List())
+	klog.V(5).Infof("Pods to be removed: %v", podsToBeRemoved.List())
 
 	ta.freeGPU(podsToBeRemoved.List())
 }
@@ -712,7 +623,7 @@ func (ta *NvidiaTopoAllocator) recycle() {
 func (ta *NvidiaTopoAllocator) freeGPU(podUids []string) {
 	for _, uid := range podUids {
 		for contName, info := range ta.allocatedPod.GetCache(uid) {
-			glog.V(2).Infof("Free %s(%s)", uid, contName)
+			klog.V(2).Infof("Free %s(%s)", uid, contName)
 
 			for _, devName := range info.Devices {
 				id, _ := utils.GetGPUMinorID(devName)
@@ -749,14 +660,14 @@ func (ta *NvidiaTopoAllocator) Allocate(_ context.Context, reqs *pluginapi.Alloc
 	resps := &pluginapi.AllocateResponse{}
 	reqCount = uint(len(req.DevicesIDs))
 
-	glog.V(4).Infof("Request GPU device: %s", strings.Join(req.DevicesIDs, ","))
+	klog.V(4).Infof("Request GPU device: %s", strings.Join(req.DevicesIDs, ","))
 
 	if ta.unfinishedPod != nil {
 		candidatePod = ta.unfinishedPod
 		cache := ta.allocatedPod.GetCache(string(candidatePod.UID))
 		if cache == nil {
 			msg := fmt.Sprintf("failed to find pod %s in cache", candidatePod.UID)
-			glog.Infof(msg)
+			klog.Infof(msg)
 			return nil, fmt.Errorf(msg)
 		}
 		for i, c := range candidatePod.Spec.Containers {
@@ -770,7 +681,7 @@ func (ta *NvidiaTopoAllocator) Allocate(_ context.Context, reqs *pluginapi.Alloc
 
 			if reqCount != utils.GetGPUResourceOfContainer(&candidatePod.Spec.Containers[i], types.VCoreAnnotation) {
 				msg := fmt.Sprintf("allocation request mismatch for pod %s, reqs %v", candidatePod.UID, reqs)
-				glog.Infof(msg)
+				klog.Infof(msg)
 				return nil, fmt.Errorf(msg)
 			}
 			candidateContainer = &candidatePod.Spec.Containers[i]
@@ -781,7 +692,7 @@ func (ta *NvidiaTopoAllocator) Allocate(_ context.Context, reqs *pluginapi.Alloc
 		pods, err := getCandidatePods(ta.k8sClient, ta.config.Hostname)
 		if err != nil {
 			msg := fmt.Sprintf("Failed to find candidate pods due to %v", err)
-			glog.Infof(msg)
+			klog.Infof(msg)
 			return nil, fmt.Errorf(msg)
 		}
 
@@ -796,12 +707,12 @@ func (ta *NvidiaTopoAllocator) Allocate(_ context.Context, reqs *pluginapi.Alloc
 				podCache := ta.allocatedPod.GetCache(string(pod.UID))
 				if podCache != nil {
 					if _, ok := podCache[c.Name]; ok {
-						glog.Infof("container %s of pod %s has been allocate, continue to next", c.Name, pod.UID)
+						klog.Infof("container %s of pod %s has been allocate, continue to next", c.Name, pod.UID)
 						continue
 					}
 				}
 				if utils.GetGPUResourceOfContainer(&pod.Spec.Containers[i], types.VCoreAnnotation) == reqCount {
-					glog.Infof("Found candidate Pod %s(%s) with device count %d", pod.UID, c.Name, reqCount)
+					klog.Infof("Found candidate Pod %s(%s) with device count %d", pod.UID, c.Name, reqCount)
 					candidatePod = pod
 					candidateContainer = &pod.Spec.Containers[i]
 					found = true
@@ -820,13 +731,13 @@ func (ta *NvidiaTopoAllocator) Allocate(_ context.Context, reqs *pluginapi.Alloc
 
 		resp, err := ta.allocateOne(candidatePod, candidateContainer, req)
 		if err != nil {
-			glog.Errorf(err.Error())
+			klog.Errorf(err.Error())
 			return nil, err
 		}
 		resps.ContainerResponses = append(resps.ContainerResponses, resp)
 	} else {
 		msg := fmt.Sprintf("candidate pod not found for request %v, allocation failed", reqs)
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return nil, fmt.Errorf(msg)
 	}
 
@@ -854,7 +765,7 @@ func (ta *NvidiaTopoAllocator) ListAndWatchWithResourceName(resourceName string,
 		time.Sleep(time.Second)
 	}
 
-	glog.V(2).Infof("ListAndWatch %s exit", resourceName)
+	klog.V(2).Infof("ListAndWatch %s exit", resourceName)
 
 	return nil
 }
@@ -870,7 +781,7 @@ func (ta *NvidiaTopoAllocator) GetDevicePluginOptions(ctx context.Context, e *pl
 func (ta *NvidiaTopoAllocator) PreStartContainer(ctx context.Context, req *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
 	ta.Lock()
 	defer ta.Unlock()
-	glog.V(2).Infof("get preStartContainer call from k8s, req: %+v", req)
+	klog.V(2).Infof("get preStartContainer call from k8s, req: %+v", req)
 	var (
 		podUID        string
 		containerName string
@@ -884,7 +795,7 @@ func (ta *NvidiaTopoAllocator) PreStartContainer(ctx context.Context, req *plugi
 	if err != nil {
 		msg := fmt.Sprintf("%s, failed to read from checkpoint file due to %v",
 			types.PreStartContainerCheckErrMsg, err)
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return nil, fmt.Errorf(msg)
 	}
 	for _, entry := range cp.PodDeviceEntries {
@@ -909,19 +820,19 @@ func (ta *NvidiaTopoAllocator) PreStartContainer(ctx context.Context, req *plugi
 	if podUID == "" || containerName == "" {
 		msg := fmt.Sprintf("%s, failed to get pod from deviceplugin checkpoint for PreStartContainer request %v",
 			types.PreStartContainerCheckErrMsg, req)
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return nil, fmt.Errorf(msg)
 	}
 	pod, ok := watchdog.GetActivePods()[podUID]
 	if !ok {
 		msg := fmt.Sprintf("%s, failed to get pod %s in watchdog", types.PreStartContainerCheckErrMsg, podUID)
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return nil, fmt.Errorf(msg)
 	}
 
 	err = ta.preStartContainerCheck(podUID, containerName, vcore, vmemory)
 	if err != nil {
-		glog.Infof(err.Error())
+		klog.Infof(err.Error())
 		ta.queue.AddRateLimited(&allocateResult{
 			pod:     pod,
 			result:  ALLOCATE_FAIL,
@@ -935,7 +846,7 @@ func (ta *NvidiaTopoAllocator) PreStartContainer(ctx context.Context, req *plugi
 	err = ta.requestForVCuda(podUID)
 	if err != nil {
 		msg := fmt.Sprintf("failed to setup VCuda for pod %s(%s) due to %v", podUID, containerName, err)
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return nil, fmt.Errorf(msg)
 	}
 
@@ -956,27 +867,27 @@ func (ta *NvidiaTopoAllocator) preStartContainerCheck(podUID string, containerNa
 	if cache == nil {
 		msg := fmt.Sprintf("%s, failed to get pod %s from allocatedPod cache",
 			types.PreStartContainerCheckErrMsg, podUID)
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return fmt.Errorf(msg)
 	}
 
 	if c, ok := cache[containerName]; !ok {
 		msg := fmt.Sprintf("%s, failed to get container %s of pod %s from allocatedPod cache",
 			types.PreStartContainerCheckErrMsg, containerName, podUID)
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return fmt.Errorf(msg)
 	} else if c.Memory != vmemory*types.MemoryBlockSize || c.Cores != vcore {
 		// request and cache mismatch, evict the pod
 		msg := fmt.Sprintf("%s, pod %s container %s requset mismatch from cache. req: vcore %d vmemory %d; cache: vcore %d vmemory %d",
 			types.PreStartContainerCheckErrMsg, podUID, containerName, vcore, vmemory*types.MemoryBlockSize, c.Cores, c.Memory)
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return fmt.Errorf(msg)
 	} else {
 		devices := c.Devices
 		if (vcore < nvtree.HundredCore && len(devices) != 1) ||
 			(vcore >= nvtree.HundredCore && len(devices) != int(vcore/nvtree.HundredCore)) {
 			msg := fmt.Sprintf("allocated devices mismatch, request for %d vcore, allocate %v", vcore, devices)
-			glog.Infof(msg)
+			klog.Infof(msg)
 			return fmt.Errorf(msg)
 		}
 	}
@@ -996,7 +907,7 @@ func (ta *NvidiaTopoAllocator) processNextResult() bool {
 
 	result, ok := key.(*allocateResult)
 	if !ok {
-		glog.Infof("Failed to process result: %v, unable to translate to allocateResult", key)
+		klog.Infof("Failed to process result: %v, unable to translate to allocateResult", key)
 		return true
 	}
 	// Invoke the method containing the business logic
@@ -1017,13 +928,13 @@ func (ta *NvidiaTopoAllocator) processResult(ar *allocateResult) error {
 		annotationMap, err := ta.getReadyAnnotations(ar.pod, true)
 		if err != nil {
 			msg := fmt.Sprintf("failed to get ready annotation of pod %s due to %s", ar.pod.UID, err.Error())
-			glog.Infof(msg)
+			klog.Infof(msg)
 			return fmt.Errorf(msg)
 		}
 		err = patchPodWithAnnotations(ta.k8sClient, ar.pod, annotationMap)
 		if err != nil {
 			msg := fmt.Sprintf("add annotation for pod %s failed due to %s", ar.pod.UID, err.Error())
-			glog.Infof(msg)
+			klog.Infof(msg)
 			return fmt.Errorf(msg)
 		}
 		close(ar.resChan)
@@ -1040,7 +951,7 @@ func (ta *NvidiaTopoAllocator) processResult(ar *allocateResult) error {
 		err := ta.updatePodStatus(ar.pod)
 		if err != nil {
 			msg := fmt.Sprintf("failed to set status of pod %s to PodFailed due to %s", ar.pod.UID, err.Error())
-			glog.Infof(msg)
+			klog.Infof(msg)
 			return fmt.Errorf(msg)
 		}
 	case PREDICATE_MISSING:
@@ -1048,12 +959,12 @@ func (ta *NvidiaTopoAllocator) processResult(ar *allocateResult) error {
 		err = patchPodWithAnnotations(ta.k8sClient, ar.pod, annotationMap)
 		if err != nil {
 			msg := fmt.Sprintf("add annotation for pod %s failed due to %s", ar.pod.UID, err.Error())
-			glog.Infof(msg)
+			klog.Infof(msg)
 			return fmt.Errorf(msg)
 		}
 		close(ar.resChan)
 	default:
-		glog.Infof("unknown allocation result %d for pod %s", ar.result, ar.pod.UID)
+		klog.Infof("unknown allocation result %d for pod %s", ar.result, ar.pod.UID)
 	}
 	return nil
 }
@@ -1064,7 +975,7 @@ func (ta *NvidiaTopoAllocator) getReadyAnnotations(pod *v1.Pod, assigned bool) (
 	cache := ta.allocatedPod.GetCache(string(pod.UID))
 	if cache == nil {
 		msg := fmt.Sprintf("failed to get pod %s from allocatedPod cache", pod.UID)
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return nil, fmt.Errorf(msg)
 	}
 
@@ -1077,7 +988,7 @@ func (ta *NvidiaTopoAllocator) getReadyAnnotations(pod *v1.Pod, assigned bool) (
 		containerCache, ok := cache[c.Name]
 		if !ok {
 			msg := fmt.Sprintf("failed to get container %s of pod %s from allocatedPod cache", c.Name, pod.UID)
-			glog.Infof(msg)
+			klog.Infof(msg)
 			err = fmt.Errorf(msg)
 			continue
 		}
@@ -1097,7 +1008,7 @@ func (ta *NvidiaTopoAllocator) getReadyAnnotations(pod *v1.Pod, assigned bool) (
 }
 
 func (ta *NvidiaTopoAllocator) updatePodStatus(pod *v1.Pod) error {
-	glog.V(4).Infof("Try to update status of pod %s", pod.UID)
+	klog.V(4).Infof("Try to update status of pod %s", pod.UID)
 
 	err := wait.PollImmediate(time.Second, waitTimeout, func() (bool, error) {
 		_, err := ta.k8sClient.CoreV1().Pods(pod.Namespace).UpdateStatus(pod)
@@ -1105,7 +1016,7 @@ func (ta *NvidiaTopoAllocator) updatePodStatus(pod *v1.Pod) error {
 			return true, nil
 		}
 		if utils.ShouldRetry(err) {
-			glog.Infof("update status of pod %s failed due to %v, try again", pod.UID, err)
+			klog.Infof("update status of pod %s failed due to %v, try again", pod.UID, err)
 			newPod, err := ta.k8sClient.CoreV1().Pods(pod.Namespace).Get(pod.Name, metav1.GetOptions{})
 			if err != nil {
 				return false, err
@@ -1114,11 +1025,11 @@ func (ta *NvidiaTopoAllocator) updatePodStatus(pod *v1.Pod) error {
 			pod = newPod
 			return false, nil
 		}
-		glog.V(4).Infof("Failed to update status of pod %s due to %v", pod.UID, err)
+		klog.V(4).Infof("Failed to update status of pod %s due to %v", pod.UID, err)
 		return false, err
 	})
 	if err != nil {
-		glog.Errorf("failed to update status of pod %s due to %v", pod.UID, err)
+		klog.Errorf("failed to update status of pod %s due to %v", pod.UID, err)
 		return err
 	}
 
@@ -1138,7 +1049,7 @@ func (ta *NvidiaTopoAllocator) deletePodWithOwnerRef(pod *v1.Pod) error {
 			}
 		}
 		// delete the pod
-		glog.V(4).Infof("Try to delete pod %s", pod.UID)
+		klog.V(4).Infof("Try to delete pod %s", pod.UID)
 		err := wait.PollImmediate(time.Second, waitTimeout, func() (bool, error) {
 			err := ta.k8sClient.CoreV1().Pods(pod.Namespace).Delete(pod.Name, &metav1.DeleteOptions{})
 			if err == nil {
@@ -1147,11 +1058,11 @@ func (ta *NvidiaTopoAllocator) deletePodWithOwnerRef(pod *v1.Pod) error {
 			if utils.ShouldRetry(err) {
 				return false, nil
 			}
-			glog.V(4).Infof("Failed to delete pod %s due to %v", pod.UID, err)
+			klog.V(4).Infof("Failed to delete pod %s due to %v", pod.UID, err)
 			return false, err
 		})
 		if err != nil {
-			glog.Errorf("failed to delete pod %s due to %v", pod.UID, err)
+			klog.Errorf("failed to delete pod %s due to %v", pod.UID, err)
 			return err
 		}
 	}
@@ -1187,7 +1098,7 @@ func patchPodWithAnnotations(client kubernetes.Interface, pod *v1.Pod, annotatio
 	})
 	if err != nil {
 		msg := fmt.Sprintf("failed to add annotation %v to pod %s due to %s", annotationMap, pod.UID, err.Error())
-		glog.Infof(msg)
+		klog.Infof(msg)
 		return fmt.Errorf(msg)
 	}
 	return nil
@@ -1215,9 +1126,9 @@ func getCandidatePods(client kubernetes.Interface, hostname string) ([]*v1.Pod, 
 		}
 	}
 
-	if glog.V(4) {
+	if klog.V(4) {
 		for _, pod := range candidatePods {
-			glog.Infof("candidate pod %s in ns %s with timestamp %d is found.",
+			klog.Infof("candidate pod %s in ns %s with timestamp %d is found.",
 				pod.Name,
 				pod.Namespace,
 				utils.GetPredicateTimeOfPod(pod))
@@ -1260,7 +1171,7 @@ func getPodsOnNode(client kubernetes.Interface, hostname string, phase string) (
 		return pods, fmt.Errorf("failed to get Pods on node %s because: %v", hostname, err)
 	}
 
-	glog.V(9).Infof("all pods on this node: %v", podList.Items)
+	klog.V(9).Infof("all pods on this node: %v", podList.Items)
 	for _, pod := range podList.Items {
 		pods = append(pods, pod)
 	}
@@ -1295,23 +1206,23 @@ func (pods PodsOrderedByPredicateTime) Swap(i, j int) {
 func (ta *NvidiaTopoAllocator) readCheckpoint() {
 	data, err := ta.checkpointManager.Read()
 	if err != nil {
-		glog.Warningf("Failed to read from checkpoint due to %s", err.Error())
+		klog.Warningf("Failed to read from checkpoint due to %s", err.Error())
 		return
 	}
 	err = json.Unmarshal(data, ta.allocatedPod)
 	if err != nil {
-		glog.Warningf("Failed to unmarshal data from checkpoint due to %s", err.Error())
+		klog.Warningf("Failed to unmarshal data from checkpoint due to %s", err.Error())
 	}
 }
 
 func (ta *NvidiaTopoAllocator) writeCheckpoint() {
 	data, err := json.Marshal(ta.allocatedPod)
 	if err != nil {
-		glog.Warningf("Failed to marshal allocatedPod due to %s", err.Error())
+		klog.Warningf("Failed to marshal allocatedPod due to %s", err.Error())
 		return
 	}
 	err = ta.checkpointManager.Write(data)
 	if err != nil {
-		glog.Warningf("Failed to write checkpoint due to %s", err.Error())
+		klog.Warningf("Failed to write checkpoint due to %s", err.Error())
 	}
 }

@@ -18,6 +18,7 @@
 package nvidia
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"strconv"
@@ -26,22 +27,19 @@ import (
 
 	"tkestack.io/gpu-manager/pkg/config"
 	"tkestack.io/gpu-manager/pkg/device/nvidia"
+	"tkestack.io/gpu-manager/pkg/services/allocator/cache"
 	"tkestack.io/gpu-manager/pkg/services/watchdog"
 	"tkestack.io/gpu-manager/pkg/types"
 	"tkestack.io/gpu-manager/pkg/utils"
 
-	dockertypes "github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
-	klettypes "k8s.io/kubernetes/pkg/kubelet/types"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 type podRawInfo struct {
@@ -64,7 +62,6 @@ func init() {
 }
 
 func TestAllocatorRecover(t *testing.T) {
-	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	//init tree
 	obj := nvidia.NewNvidiaTree(nil)
@@ -140,28 +137,10 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 			},
 		},
 	}
-	podSets := sets.NewString()
+
+	podCache := cache.NewAllocateCache()
 	//prepare ContainerCreateConfig and create the test container
 	for _, testCase := range testCase {
-		labels := make(map[string]string)
-		labels[klettypes.KubernetesContainerNameLabel] = testCase.PodName
-		labels[klettypes.KubernetesPodUIDLabel] = testCase.PodUID
-		labels[types.VCoreAnnotation] = "100"
-		labels[types.VMemoryAnnotation] = "1"
-		containerCreateCfg := dockertypes.ContainerCreateConfig{
-			Name:   testCase.PodName,
-			Config: &container.Config{Labels: labels},
-			HostConfig: &container.HostConfig{
-				Resources: container.Resources{
-					Devices: []container.DeviceMapping{
-						{
-							PathOnHost: testCase.Device,
-						},
-					},
-				},
-			},
-		}
-		alloc.dockerClient.CreateContainer(containerCreateCfg)
 		pod := &v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: testCase.PodName,
@@ -193,13 +172,25 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 				Time: time.Now(),
 			}
 		}
-		if !podSets.Has(string(pod.UID)) {
-			podSets.Insert(string(pod.UID))
+		if podCache.GetCache(string(pod.UID)) == nil {
 			k8sClient.CoreV1().Pods("test-ns").Create(pod)
+			podCache.Insert(string(pod.UID), testCase.PodName, &cache.Info{
+				Devices: []string{testCase.Device},
+				Cores:   100,
+				Memory:  1,
+			})
 		}
 	}
 
 	watchdog.NewPodCacheForTest(k8sClient)
+	data, err := json.Marshal(podCache)
+	if err != nil {
+		t.Errorf("Failed to marshal allocatedPod due to %v", err)
+		return
+	}
+	alloc.checkpointManager.Write(data)
+	defer alloc.checkpointManager.Delete()
+
 	//test allocator recoverInUsed()
 	alloc.recoverInUsed()
 	allocatedPods := alloc.allocatedPod.Pods()
@@ -214,7 +205,6 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 }
 
 func TestAllocator(t *testing.T) {
-	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	//init tree
 	obj := nvidia.NewNvidiaTree(nil)
@@ -426,7 +416,6 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 }
 
 func TestAllocateOneRepeatly(t *testing.T) {
-	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	//init tree
 	obj := nvidia.NewNvidiaTree(nil)
@@ -507,7 +496,6 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 }
 
 func TestAllocateOneFail(t *testing.T) {
-	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	//init tree
 	obj := nvidia.NewNvidiaTree(nil)

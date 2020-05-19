@@ -30,7 +30,6 @@ func init() {
 }
 
 func TestSort(t *testing.T) {
-	t.Skipf("go test not supported cgo")
 	flag.Parse()
 	//init tree
 	obj := NewNvidiaTree(nil)
