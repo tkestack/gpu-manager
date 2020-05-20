@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: gpu-manager-daemonset
@@ -6,6 +6,9 @@ metadata:
 spec:
   updateStrategy:
     type: RollingUpdate
+  selector:
+    matchLabels:
+      name: gpu-manager-ds
   template:
     metadata:
       # This annotation is deprecated. Kept here for backward compatibility
@@ -52,7 +55,6 @@ spec:
               mountPath: /var/log/gpu-manager
             - name: run-dir
               mountPath: /var/run
-              readOnly: true
             - name: cgroup
               mountPath: /sys/fs/cgroup
               readOnly: true
@@ -62,6 +64,8 @@ spec:
           env:
             - name: LOG_LEVEL
               value: "4"
+            - name: EXTRA_FLAGS
+              value: "--logtostderr=false"
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
