@@ -7,7 +7,7 @@ ARG commit
 RUN yum install -y rpm-build make
 
 # default git has problems while cloning some repository
-RUN yum install -y https://centos7.iuscommunity.org/ius-release.rpm \
+RUN yum install -y https://repo.ius.io/ius-release-el7.rpm \
   && yum install -y git222
 
 ENV GOLANG_VERSION 1.12.4
