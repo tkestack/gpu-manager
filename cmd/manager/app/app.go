@@ -26,7 +26,6 @@ import (
 
 	"tkestack.io/gpu-manager/cmd/manager/options"
 	"tkestack.io/gpu-manager/pkg/config"
-	"tkestack.io/gpu-manager/pkg/runtime"
 	"tkestack.io/gpu-manager/pkg/server"
 	"tkestack.io/gpu-manager/pkg/types"
 	"tkestack.io/gpu-manager/pkg/utils"
@@ -51,8 +50,9 @@ func Run(opt *options.Options) error {
 		EnableShare:              opt.EnableShare,
 		AllocationCheckPeriod:    time.Duration(opt.AllocationCheckPeriod) * time.Second,
 		CheckpointPath:           opt.CheckpointPath,
-		ContainerRuntime:         opt.ContainerRuntime,
 		ContainerRuntimeEndpoint: opt.ContainerRuntimeEndpoint,
+		CgroupDriver:             opt.CgroupDriver,
+		RequestTimeout:           opt.RequestTimeout,
 	}
 
 	if len(opt.HostnameOverride) > 0 {
@@ -65,12 +65,6 @@ func Run(opt *options.Options) error {
 
 	if len(opt.DevicePluginPath) > 0 {
 		cfg.DevicePluginPath = opt.DevicePluginPath
-	}
-
-	switch opt.ContainerRuntime {
-	case runtime.DockerRuntime, runtime.CRIORuntime:
-	default:
-		klog.Exitf("Unsupported container runtime: %s", opt.ContainerRuntime)
 	}
 
 	cfg.NodeLabels = make(map[string]string)

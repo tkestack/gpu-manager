@@ -145,23 +145,16 @@ type VirtualManager struct {
 	cfg                     *config.Config
 	containerRuntimeManager runtime.ContainerRuntimeInterface
 	vDeviceServers          map[string]*grpc.Server
-	procsReader             utils.CgroupProcsReader
 }
 
 var _ vcudaapi.VCUDAServiceServer = &VirtualManager{}
 
 //NewVirtualManager returns a new VirtualManager.
 func NewVirtualManager(config *config.Config, runtimeManager runtime.ContainerRuntimeInterface) *VirtualManager {
-	cgroupDriver, err := runtimeManager.CgroupDriver()
-	if err != nil {
-		klog.Fatalf("Cant't get docker info: %v", err)
-	}
-
 	manager := &VirtualManager{
 		cfg:                     config,
 		containerRuntimeManager: runtimeManager,
 		vDeviceServers:          make(map[string]*grpc.Server),
-		procsReader:             utils.NewCgroupProcs(types.CGROUP_BASE, cgroupDriver),
 	}
 
 	return manager
@@ -195,27 +188,7 @@ func (vm *VirtualManager) Run() {
 
 	go vm.garbageCollector()
 	go vm.process()
-	go vm.healthCheck()
 	klog.V(2).Infof("Virtual manager is running")
-}
-
-func (vm *VirtualManager) healthCheck() {
-	lastSuccessProbe := time.Now()
-	checker := time.NewTicker(time.Second)
-	defer checker.Stop()
-
-	for range checker.C {
-		_, err := vm.containerRuntimeManager.CgroupDriver()
-		if err == nil {
-			lastSuccessProbe = time.Now()
-			continue
-		}
-
-		klog.Warningf("Probe docker version failed, %v", err)
-		if int(time.Now().Sub(lastSuccessProbe).Seconds()) > 10 {
-			klog.Fatalf("Too long to probe docker version, maybe docker is down, restarting")
-		}
-	}
 }
 
 func (vm *VirtualManager) vDeviceWatcher(registered chan struct{}) {
@@ -466,7 +439,7 @@ func (vm *VirtualManager) registerVDeviceWithContainerName(podUID, contName stri
 }
 
 //RegisterVDevice handles RPC calls from vcuda client
-func (vm *VirtualManager) RegisterVDevice(ctx context.Context, req *vcudaapi.VDeviceRequest) (*vcudaapi.VDeviceResponse, error) {
+func (vm *VirtualManager) RegisterVDevice(_ context.Context, req *vcudaapi.VDeviceRequest) (*vcudaapi.VDeviceResponse, error) {
 	podUID := req.PodUid
 	contName := req.ContainerName
 	contID := req.ContainerId
@@ -488,7 +461,10 @@ func (vm *VirtualManager) writePidFile(filename string, contID string) (string, 
 		return "", fmt.Errorf("can't find %s from docker", contID)
 	}
 
-	pidsInContainer := vm.procsReader.Read(containerInfo.CgroupParent, contID)
+	pidsInContainer, err := vm.containerRuntimeManager.GetPidsInContainers(contID)
+	if err != nil {
+		return "", err
+	}
 	if len(pidsInContainer) == 0 {
 		return "", fmt.Errorf("empty pids")
 	}
@@ -502,7 +478,7 @@ func (vm *VirtualManager) writePidFile(filename string, contID string) (string, 
 		return "", fmt.Errorf("can't sink pids file")
 	}
 
-	return containerInfo.Name, nil
+	return containerInfo.Metadata.Name, nil
 }
 
 func (vm *VirtualManager) writeConfigFile(filename string, podUID, name string) error {

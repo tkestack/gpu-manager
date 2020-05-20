@@ -39,8 +39,9 @@ type Config struct {
 	EnableShare              bool
 	AllocationCheckPeriod    time.Duration
 	CheckpointPath           string
-	ContainerRuntime         string
 	ContainerRuntimeEndpoint string
+	CgroupDriver             string
+	RequestTimeout           time.Duration
 
 	VCudaRequestsQueue chan *types.VCudaRequest
 }

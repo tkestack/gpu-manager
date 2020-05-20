@@ -49,8 +49,6 @@ type Display struct {
 	config                  *config.Config
 	tree                    *nvtree.NvidiaTree
 	containerRuntimeManager runtime.ContainerRuntimeInterface
-	hostName                string
-	procsReader             utils.CgroupProcsReader
 }
 
 var _ displayapi.GPUDisplayServer = &Display{}
@@ -58,17 +56,11 @@ var _ prometheus.Collector = &Display{}
 
 //NewDisplay returns a new Display
 func NewDisplay(config *config.Config, tree device.GPUTree, runtimeManager runtime.ContainerRuntimeInterface) *Display {
-	cgroupDriver, err := runtimeManager.CgroupDriver()
-	if err != nil {
-		klog.Fatalf("Cant't get docker info: %v", err)
-		return nil
-	}
 	_tree, _ := tree.(*nvtree.NvidiaTree)
 	return &Display{
 		tree:                    _tree,
 		config:                  config,
 		containerRuntimeManager: runtimeManager,
-		procsReader:             utils.NewCgroupProcs(types.CGROUP_BASE, cgroupDriver),
 	}
 }
 
@@ -92,10 +84,6 @@ func (disp *Display) PrintUsages(context.Context, *google_protobuf1.Empty) (*dis
 	}
 
 	for _, pod := range activePods {
-		if pod.Spec.NodeName != disp.hostName {
-			continue
-		}
-
 		podUID := string(pod.UID)
 
 		podUsage := disp.getPodUsage(pod)
@@ -138,10 +126,11 @@ func (disp *Display) getPodUsage(pod *v1.Pod) map[string]*displayapi.Devices {
 
 	for _, stat := range pod.Status.ContainerStatuses {
 		contName := stat.Name
-		contID := strings.TrimPrefix(stat.ContainerID, "docker://")
+		contID := strings.TrimPrefix(stat.ContainerID, fmt.Sprintf("%s://", disp.containerRuntimeManager.RuntimeName()))
 		if len(contID) == 0 {
 			continue
 		}
+		klog.V(4).Infof("Get container %s usage", contID)
 
 		containerInfo, err := disp.containerRuntimeManager.InspectContainer(contID)
 		if err != nil {
@@ -149,8 +138,12 @@ func (disp *Display) getPodUsage(pod *v1.Pod) map[string]*displayapi.Devices {
 			continue
 		}
 
-		pidsInContainer := disp.procsReader.Read(containerInfo.CgroupParent, contID)
-		_, _, deviceNames := utils.GetGPUData(containerInfo.Labels)
+		pidsInContainer, err := disp.containerRuntimeManager.GetPidsInContainers(contID)
+		if err != nil {
+			klog.Errorf("can't get pids form container %s, %v", contID, err)
+			continue
+		}
+		_, _, deviceNames := utils.GetGPUData(containerInfo.Annotations)
 		devicesUsage := make([]*displayapi.DeviceInfo, 0)
 		for _, deviceName := range deviceNames {
 			if utils.IsValidGPUPath(deviceName) {
@@ -318,9 +311,6 @@ func (disp *Display) Describe(ch chan<- *prometheus.Desc) {
 // Collect implements prometheus Collector interface
 func (disp *Display) Collect(ch chan<- prometheus.Metric) {
 	for _, pod := range watchdog.GetActivePods() {
-		if pod.Spec.NodeName != disp.hostName {
-			continue
-		}
 		valueLabels := make([]string, len(defaultMetricLabels))
 		valueLabels[metricPodName] = pod.Name
 		valueLabels[metricNamespace] = pod.Namespace

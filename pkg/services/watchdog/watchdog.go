@@ -18,6 +18,7 @@
 package watchdog
 
 import (
+	"fmt"
 	"time"
 
 	"tkestack.io/gpu-manager/pkg/utils"
@@ -114,6 +115,23 @@ func GetActivePods() map[string]*v1.Pod {
 	}
 
 	return activePods
+}
+
+func GetPod(namespace, name string) (*v1.Pod, error) {
+	pod, err := podCache.podInformer.Lister().Pods(namespace).Get(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if podIsTerminated(pod) {
+		return nil, fmt.Errorf("terminated pod")
+	}
+
+	if !utils.IsGPURequiredPod(pod) {
+		return nil, fmt.Errorf("no gpu pod")
+	}
+
+	return pod, nil
 }
 
 func podIsTerminated(pod *v1.Pod) bool {

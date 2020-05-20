@@ -18,14 +18,11 @@
 package utils
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -58,91 +55,6 @@ var (
 //UnixDial dials to a unix socket using net.DialTimeout
 func UnixDial(addr string, timeout time.Duration) (net.Conn, error) {
 	return net.DialTimeout("unix", addr, timeout)
-}
-
-type CgroupProcsReader interface {
-	Read(cgroupParent, containerID string) []int
-}
-
-type CgroupProcsWriter interface {
-	Write(cgroupParent, containerID string, pids []int) error
-}
-
-type linuxCgroupProcs struct {
-	base         string
-	cgroupDriver string
-}
-
-func NewCgroupProcs(cgroupMountPoint, cgroupDriver string) *linuxCgroupProcs {
-	return &linuxCgroupProcs{
-		base:         cgroupMountPoint,
-		cgroupDriver: cgroupDriver,
-	}
-}
-
-func (l *linuxCgroupProcs) getProcFile(cgroupParent, containerID string) string {
-	if l.cgroupDriver == "systemd" {
-		base := ""
-		qos := ""
-
-		splits := strings.SplitN(cgroupParent, "-", 3)
-		if len(splits) >= 2 {
-			base = splits[0]
-		}
-
-		if len(splits) == 3 {
-			qos = splits[1]
-		}
-
-		return filepath.Clean(filepath.Join(l.base, base+".slice", base+"-"+qos+".slice", cgroupParent, "docker-"+containerID+".scope", types.CGROUP_PROCS))
-	}
-
-	return filepath.Clean(filepath.Join(l.base, cgroupParent, containerID, types.CGROUP_PROCS))
-}
-
-//Read pids of container from cgroup.procs file
-func (l *linuxCgroupProcs) Read(cgroupParent, containerID string) []int {
-	procsFile := l.getProcFile(cgroupParent, containerID)
-
-	f, err := os.Open(procsFile)
-	if err != nil {
-		klog.Errorf("can't read %s, %v", procsFile, err)
-		return nil
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	pids := make([]int, 0)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if pid, err := strconv.Atoi(line); err == nil {
-			pids = append(pids, pid)
-		}
-	}
-
-	klog.V(4).Infof("Read from %s, pids: %v", procsFile, pids)
-	return pids
-}
-
-func (l *linuxCgroupProcs) Write(cgroupParent, containerID string, pids []int) error {
-	procsFile := l.getProcFile(cgroupParent, containerID)
-
-	klog.Infof("Try to write pid file at %s", procsFile)
-	f, err := os.OpenFile(procsFile, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0777)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	for _, pid := range pids {
-		_, err := io.WriteString(f, fmt.Sprintf("%d\n", pid))
-		if err != nil {
-			return err
-		}
-	}
-
-	klog.V(4).Infof("Write down %s, pids: %v", procsFile, pids)
-	return nil
 }
 
 //IsValidGPUPath checks if path is valid Nvidia GPU device path
@@ -195,18 +107,6 @@ func NewFSWatcher(files ...string) (*fsnotify.Watcher, error) {
 	}
 
 	return watcher, nil
-}
-
-//TruncateContainerName truncate container names to name[:TruncateLen]
-//if len(name) > TruncateLen
-func TruncateContainerName(name string) string {
-	if len(name) > TruncateLen {
-		newName := name[:TruncateLen]
-		klog.V(2).Infof("truncate container name from %s to %s", name, newName)
-		return newName
-	}
-
-	return name
 }
 
 // WaitForServer checks if grpc server is alive
@@ -270,8 +170,6 @@ func MakeContainerNamePrefix(containerName string) string {
 }
 
 func IsGPURequiredPod(pod *v1.Pod) bool {
-	klog.V(4).Infof("Determine if the pod %s needs GPU resource", pod.Name)
-
 	vcore := GetGPUResourceOfPod(pod, types.VCoreAnnotation)
 	vmemory := GetGPUResourceOfPod(pod, types.VMemoryAnnotation)
 

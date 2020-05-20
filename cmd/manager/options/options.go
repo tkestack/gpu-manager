@@ -18,6 +18,8 @@
 package options
 
 import (
+	"time"
+
 	"github.com/spf13/pflag"
 )
 
@@ -28,8 +30,8 @@ const (
 	DefaultVirtualManagerPath       = "/etc/gpu-manager/vm"
 	DefaultAllocationCheckPeriod    = 30
 	DefaultCheckpointPath           = "/etc/gpu-manager"
-	DefaultContainerRuntime         = "docker"
-	DefaultContainerRuntimeEndpoint = "unix:///var/run/docker.sock"
+	DefaultContainerRuntimeEndpoint = "/var/run/dockershim.sock"
+	DefaultCgroupDriver             = "cgroupfs"
 )
 
 // Options contains plugin information
@@ -48,8 +50,9 @@ type Options struct {
 	EnableShare              bool
 	AllocationCheckPeriod    int
 	CheckpointPath           string
-	ContainerRuntime         string
 	ContainerRuntimeEndpoint string
+	CgroupDriver             string
+	RequestTimeout           time.Duration
 }
 
 // NewOptions gives a default options template.
@@ -62,8 +65,9 @@ func NewOptions() *Options {
 		VirtualManagerPath:       DefaultVirtualManagerPath,
 		AllocationCheckPeriod:    DefaultAllocationCheckPeriod,
 		CheckpointPath:           DefaultCheckpointPath,
-		ContainerRuntime:         DefaultContainerRuntime,
 		ContainerRuntimeEndpoint: DefaultContainerRuntimeEndpoint,
+		CgroupDriver:             DefaultCgroupDriver,
+		RequestTimeout:           time.Second * 5,
 	}
 }
 
@@ -83,6 +87,9 @@ func (opt *Options) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&opt.CheckpointPath, "checkpoint-path", opt.CheckpointPath, "configuration path for checkpoint store file")
 	fs.BoolVar(&opt.EnableShare, "share-mode", opt.EnableShare, "enable share mode allocation")
 	fs.IntVar(&opt.AllocationCheckPeriod, "allocation-check-period", opt.AllocationCheckPeriod, "allocation check period, unit second")
-	fs.StringVar(&opt.ContainerRuntime, "container-runtime", opt.ContainerRuntime, "container runtime name")
 	fs.StringVar(&opt.ContainerRuntimeEndpoint, "container-runtime-endpoint", opt.ContainerRuntimeEndpoint, "container runtime endpoint")
+	fs.StringVar(&opt.CgroupDriver, "cgroup-driver", opt.CgroupDriver, "Driver that the kubelet uses to manipulate cgroups on the host.  "+
+		"Possible values: 'cgroupfs', 'systemd'")
+	fs.DurationVar(&opt.RequestTimeout, "runtime-request-timeout", opt.RequestTimeout,
+		"request timeout for communicating with container runtime endpoint")
 }

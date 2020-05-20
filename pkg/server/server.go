@@ -34,7 +34,6 @@ import (
 	"tkestack.io/gpu-manager/pkg/config"
 	deviceFactory "tkestack.io/gpu-manager/pkg/device"
 	containerRuntime "tkestack.io/gpu-manager/pkg/runtime"
-	"tkestack.io/gpu-manager/pkg/runtime/docker"
 	allocFactory "tkestack.io/gpu-manager/pkg/services/allocator"
 	// Register allocator controller
 	_ "tkestack.io/gpu-manager/pkg/services/allocator/register"
@@ -147,15 +146,13 @@ func (m *managerImpl) Run() error {
 		return fmt.Errorf("can not generate client from config: error(%v)", err)
 	}
 
-	var runtimeManager containerRuntime.ContainerRuntimeInterface
-
-	switch m.config.ContainerRuntime {
-	case containerRuntime.DockerRuntime:
-		runtimeManager = docker.NewDockerRuntimeManager(m.config.ContainerRuntimeEndpoint)
-	case containerRuntime.CRIORuntime:
-	default:
-		klog.Exitf("Unsupported container runtime: %s", m.config.ContainerRuntime)
+	containerRuntimeManager, err := containerRuntime.NewContainerRuntimeManager(
+		m.config.CgroupDriver, m.config.ContainerRuntimeEndpoint, m.config.RequestTimeout)
+	if err != nil {
+		klog.Errorf("can't create container runtime manager: %v", err)
+		return err
 	}
+	klog.V(2).Infof("Container runtime manager is running")
 
 	watchdog.NewPodCache(client, m.config.Hostname)
 	klog.V(2).Infof("Watchdog is running")
@@ -165,7 +162,7 @@ func (m *managerImpl) Run() error {
 		return err
 	}
 
-	m.virtualManager = vitrual_manager.NewVirtualManager(m.config, runtimeManager)
+	m.virtualManager = vitrual_manager.NewVirtualManager(m.config, containerRuntimeManager)
 	m.virtualManager.Run()
 
 	treeInitFn := deviceFactory.NewFuncForName(m.config.Driver)
@@ -180,7 +177,7 @@ func (m *managerImpl) Run() error {
 	}
 
 	m.allocator = initAllocator(m.config, tree, client)
-	m.displayer = display.NewDisplay(m.config, tree, runtimeManager)
+	m.displayer = display.NewDisplay(m.config, tree, containerRuntimeManager)
 
 	klog.V(2).Infof("Starting the GRPC server, driver %s, queryPort %d", m.config.Driver, m.config.QueryPort)
 	m.setupGRPCService()

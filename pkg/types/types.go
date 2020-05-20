@@ -90,3 +90,11 @@ var (
 	DriverLibraryPath       string
 	DriverOriginLibraryPath string
 )
+
+const (
+	ContainerNameLabelKey = "io.kubernetes.container.name"
+	PodNamespaceLabelKey  = "io.kubernetes.pod.namespace"
+	PodNameLabelKey       = "io.kubernetes.pod.name"
+	PodUIDLabelKey        = "io.kubernetes.pod.uid"
+	PodCgroupNamePrefix   = "pod"
+)

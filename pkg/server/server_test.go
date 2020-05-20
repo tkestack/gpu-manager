@@ -35,7 +35,7 @@ import (
 	"tkestack.io/gpu-manager/pkg/config"
 	deviceFactory "tkestack.io/gpu-manager/pkg/device"
 	"tkestack.io/gpu-manager/pkg/device/nvidia"
-	fake_runtime "tkestack.io/gpu-manager/pkg/runtime/fake"
+	"tkestack.io/gpu-manager/pkg/runtime"
 	allocFactory "tkestack.io/gpu-manager/pkg/services/allocator"
 	virtual_manager "tkestack.io/gpu-manager/pkg/services/virtual-manager"
 	"tkestack.io/gpu-manager/pkg/services/watchdog"
@@ -157,7 +157,7 @@ func TestServer(t *testing.T) {
 
 	// init manager
 	srv, _ := NewManager(cfg).(*managerImpl)
-	fakeRuntimeManager, _ := fake_runtime.NewFakeRuntimeManager()
+	fakeRuntimeManager := runtime.NewContainerRuntimeManagerStub()
 	srv.virtualManager = virtual_manager.NewVirtualManagerForTest(cfg, fakeRuntimeManager)
 	srv.virtualManager.Run()
 	defer stopServer(srv)

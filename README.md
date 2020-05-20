@@ -73,15 +73,18 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: vcuda
-  annotation:
+  annotations:
     tencent.com/vcuda-core-limit: 50
 spec:
   restartPolicy: Never
-  hostNetwork: true
   containers:
   - image: <test-image>
     name: nvidia
-    command: ['/usr/local/nvidia/bin/nvidia-smi']
+    command:
+    - /usr/local/nvidia/bin/nvidia-smi
+    - pmon
+    - -d
+    - 10
     resources:
       requests:
         tencent.com/vcuda-core: 50
@@ -100,11 +103,14 @@ metadata:
   name: vcuda
 spec:
   restartPolicy: Never
-  hostNetwork: true
   containers:
   - image: <test-image>
     name: nvidia
-    command: ['/usr/local/nvidia/bin/nvidia-smi']
+    command:
+    - /usr/local/nvidia/bin/nvidia-smi
+    - pmon
+    - -d
+    - 10
     resources:
       requests:
         tencent.com/vcuda-core: 200
