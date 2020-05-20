@@ -583,6 +583,11 @@ func runVDeviceServer(dir string, handler vcudaapi.VCUDAServiceServer) *grpc.Ser
 		return nil
 	}
 
+	if err := os.Chmod(socketFile, DEFAULT_DIR_MODE); err != nil {
+		klog.Errorf("chmod %s failed, %v", socketFile, err)
+		return nil
+	}
+
 	srv := grpc.NewServer()
 	vcudaapi.RegisterVCUDAServiceServer(srv, handler)
 
