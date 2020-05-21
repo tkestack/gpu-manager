@@ -119,3 +119,7 @@ spec:
         tencent.com/vcuda-core: 200
         tencent.com/vcuda-memory: 60
 ```
+
+## FAQ
+
+If you have some questions about this project, you can first refer to [FAQ](./docs/faq.md) to find a solution.
