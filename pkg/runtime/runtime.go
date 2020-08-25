@@ -101,10 +101,25 @@ func (m *containerRuntimeManager) GetPidsInContainers(containerID string) ([]int
 		return nil, err
 	}
 
-	return m.readProcsFile(filepath.Clean(filepath.Join(types.CGROUP_BASE, cgroupPath, types.CGROUP_PROCS)))
+	pids := make([]int, 0)
+	baseDir := filepath.Clean(filepath.Join(types.CGROUP_BASE, cgroupPath))
+	filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() || info.Name() != types.CGROUP_PROCS {
+			return nil
+		}
+
+		p, err := readProcsFile(path)
+		if err == nil {
+			pids = append(pids, p...)
+		}
+
+		return nil
+	})
+
+	return pids, nil
 }
 
-func (m *containerRuntimeManager) readProcsFile(file string) ([]int, error) {
+func readProcsFile(file string) ([]int, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		klog.Errorf("can't read %s, %v", file, err)
