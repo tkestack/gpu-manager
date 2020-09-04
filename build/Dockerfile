@@ -10,7 +10,7 @@ RUN yum install -y rpm-build make
 RUN yum install -y https://repo.ius.io/ius-release-el7.rpm \
   && yum install -y git222
 
-ENV GOLANG_VERSION 1.12.4
+ENV GOLANG_VERSION 1.15
 RUN curl -sSL https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz \
     | tar -C /usr/local -xz
 ENV GOPATH /go
