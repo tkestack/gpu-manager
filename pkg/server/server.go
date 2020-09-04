@@ -152,7 +152,7 @@ func (m *managerImpl) Run() error {
 			return fmt.Errorf("can not generate client from config: error(%v)", err)
 		}
 
-		watchdog.NewPodCache(client.CoreV1())
+		watchdog.NewPodCache(client, m.config.Hostname)
 		glog.V(2).Infof("Watchdog is running")
 
 		labeler := watchdog.NewNodeLabeler(client.CoreV1(), m.config.Hostname, m.config.NodeLabels)

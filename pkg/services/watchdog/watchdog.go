@@ -27,9 +27,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/informers"
+	informerCore "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/tools/cache"
 )
 
 const (
@@ -37,9 +36,13 @@ const (
 	PodResource = "pods"
 )
 
-//PodCache contains a informer of pod
+const (
+	podHostField = "spec.nodeName"
+)
+
+//PodCache contains a podInformer of pod
 type PodCache struct {
-	informer cache.SharedInformer
+	podInformer informerCore.PodInformer
 }
 
 var (
@@ -47,18 +50,19 @@ var (
 )
 
 //NewPodCache creates a new podCache
-func NewPodCache(coreClient corev1.CoreV1Interface) {
+func NewPodCache(client kubernetes.Interface, hostName string) {
 	podCache = new(PodCache)
 
-	watcher := cache.NewListWatchFromClient(coreClient.RESTClient(), PodResource, metav1.NamespaceAll, fields.Everything())
-	podCache.informer = cache.NewSharedInformer(watcher, &v1.Pod{}, time.Minute)
-
-	podCache.informer.AddEventHandler(podCache)
+	factory := informers.NewSharedInformerFactoryWithOptions(client, time.Minute, informers.WithTweakListOptions(func(options *metav1.
+	ListOptions) {
+		options.FieldSelector = fields.OneTermEqualSelector(podHostField, hostName).String()
+	}))
+	podCache.podInformer = factory.Core().V1().Pods()
 
 	ch := make(chan struct{})
-	go podCache.informer.Run(ch)
+	go podCache.podInformer.Informer().Run(ch)
 
-	for !podCache.informer.HasSynced() {
+	for !podCache.podInformer.Informer().HasSynced() {
 		time.Sleep(time.Second)
 	}
 	glog.V(2).Infof("Pod cache is running")
@@ -69,12 +73,12 @@ func NewPodCacheForTest(client kubernetes.Interface) {
 	podCache = new(PodCache)
 
 	informers := informers.NewSharedInformerFactory(client, 0)
-	podCache.informer = informers.Core().V1().Pods().Informer()
-	podCache.informer.AddEventHandler(podCache)
+	podCache.podInformer = informers.Core().V1().Pods()
+	podCache.podInformer.Informer().AddEventHandler(podCache)
 	ch := make(chan struct{})
 	informers.Start(ch)
 
-	for !podCache.informer.HasSynced() {
+	for !podCache.podInformer.Informer().HasSynced() {
 		time.Sleep(time.Second)
 	}
 	glog.V(2).Infof("Pod cache is running")
@@ -97,7 +101,7 @@ func GetActivePods() map[string]*v1.Pod {
 
 	activePods := make(map[string]*v1.Pod)
 
-	for _, item := range podCache.informer.GetStore().List() {
+	for _, item := range podCache.podInformer.Informer().GetStore().List() {
 		pod, ok := item.(*v1.Pod)
 		if !ok {
 			continue
