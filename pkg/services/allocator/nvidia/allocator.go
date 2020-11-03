@@ -285,15 +285,30 @@ func (ta *NvidiaTopoAllocator) initEvaluator(tree *nvtree.NvidiaTree) {
 }
 
 func (ta *NvidiaTopoAllocator) loadModule() {
-	if _, err := os.Stat(types.NvidiaCtlDevice); err != nil {
-		if out, err := exec.Command("modprobe", "-va", "nvidia-uvm", "nvidia").CombinedOutput(); err != nil {
-			klog.V(3).Infof("Running modprobe nvidia-uvm nvidia failed with message: %s, error: %v", out, err)
+	if _, statErr := os.Stat(types.NvidiaCtlDevice); statErr != nil {
+		if out, err := exec.Command("modprobe", "-v", "nvidia").CombinedOutput(); err != nil {
+			klog.V(3).Infof("Running modprobe nvidia failed with message: %s, error: %v", out, err)
+		}
+		if os.IsNotExist(statErr) {
+			if out, err := exec.Command("mknod", "-m", "666", types.NvidiaCtlDevice, "c", "195", "255").CombinedOutput(); err != nil {
+				klog.V(3).Infof("Running mknod -m 666 /dev/nvidiactl c 195 255 failed with message: %s, error: %v", out, err)
+			}
 		}
 	}
 
-	if _, err := os.Stat(types.NvidiaUVMDevice); err != nil {
-		if out, err := exec.Command("modprobe", "-va", "nvidia-uvm", "nvidia").CombinedOutput(); err != nil {
-			klog.V(3).Infof("Running modprobe nvidia-uvm nvidia failed with message: %s, error: %v", out, err)
+	if _, statErr := os.Stat(types.NvidiaUVMDevice); statErr != nil {
+		if out, err := exec.Command("modprobe", "-v", "nvidia-uvm").CombinedOutput(); err != nil {
+			klog.V(3).Infof("Running modprobe nvidia-uvm failed with message: %s, error: %v", out, err)
+		}
+		if os.IsNotExist(statErr) {
+			out, err := exec.Command("sh", "-c", "grep nvidia-uvm /proc/devices | awk '{print$1}'").CombinedOutput()
+			if err != nil {
+				klog.V(3).Infof("Running sh -c grep nvidia-uvm /proc/devices | awk '{print$1}' failed with message: %s, error: %v", out, err)
+			}
+			uvmMajorNum := strings.Replace(string(out), "\n", "", -1)
+			if out, err := exec.Command("mknod", "-m", "666", types.NvidiaUVMDevice, "c", uvmMajorNum, "0").CombinedOutput(); err != nil {
+				klog.V(3).Infof("Running mknod -m 666 /dev/nvidia-uvm c %s 0 failed with message: %s, error: %v", uvmMajorNum, out, err)
+			}
 		}
 	}
 }
