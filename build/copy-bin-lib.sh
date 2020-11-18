@@ -42,7 +42,7 @@ function copy_directory() {
   local readonly path=$2
 
   echo "copy ${lib} to ${path}"
-  cp -Pf "${lib}" "${path}"
+  cp --preserve=mode,ownership -Pf "${lib}" "${path}"
 }
 
 rm -rf ${NV_DIR}
