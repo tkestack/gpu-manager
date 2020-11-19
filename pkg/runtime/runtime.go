@@ -104,6 +104,9 @@ func (m *containerRuntimeManager) GetPidsInContainers(containerID string) ([]int
 	pids := make([]int, 0)
 	baseDir := filepath.Clean(filepath.Join(types.CGROUP_BASE, cgroupPath))
 	filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
+		if info == nil {
+			return nil
+		}
 		if info.IsDir() || info.Name() != types.CGROUP_PROCS {
 			return nil
 		}
