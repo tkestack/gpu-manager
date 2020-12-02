@@ -174,11 +174,6 @@ func (t *NvidiaTree) parseFromLibrary() error {
 
 	defer nvml.Shutdown()
 
-	driverVersion, err := nvml.SystemGetDriverVersion()
-	if err != nil {
-		return err
-	}
-
 	num, err := nvml.DeviceGetCount()
 	if err != nil {
 		return err
@@ -216,12 +211,13 @@ func (t *NvidiaTree) parseFromLibrary() error {
 				return err
 			}
 
-			switch driverVersion {
-			case "396.26":
-				if ntype == nvml.TOPOLOGY_INTERNAL {
-					ntype = nvml.TOPOLOGY_SINGLE
-				}
-			default:
+			multi, err := devA.DeviceGetMultiGpuBoard()
+			if err != nil {
+				return err
+			}
+
+			if multi > 0 && ntype == nvml.TOPOLOGY_INTERNAL {
+				ntype = nvml.TOPOLOGY_SINGLE
 			}
 
 			if newNode := t.join(nodes, ntype, int(cardA), int(cardB)); newNode != nil {
