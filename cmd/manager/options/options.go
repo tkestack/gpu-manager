@@ -29,7 +29,7 @@ const (
 	DefaultSamplePeriod             = 1
 	DefaultVirtualManagerPath       = "/etc/gpu-manager/vm"
 	DefaultAllocationCheckPeriod    = 30
-	DefaultCheckpointPath           = "/etc/gpu-manager"
+	DefaultCheckpointPath           = "/etc/gpu-manager/checkpoint"
 	DefaultContainerRuntimeEndpoint = "/var/run/dockershim.sock"
 	DefaultCgroupDriver             = "cgroupfs"
 )
