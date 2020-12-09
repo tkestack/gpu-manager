@@ -28,7 +28,7 @@ const (
 	DefaultDockerHost            = "unix:////var/run/docker.sock"
 	DefaultVirtualManagerPath    = "/etc/gpu-manager/vm"
 	DefaultAllocationCheckPeriod = 30
-	DefaultCheckpointPath        = "/etc/gpu-manager"
+	DefaultCheckpointPath        = "/etc/gpu-manager/checkpoint"
 )
 
 // Options contains plugin information

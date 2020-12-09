@@ -50,6 +50,8 @@ spec:
               mountPath: /etc/gpu-manager/vm
             - name: log
               mountPath: /var/log/gpu-manager
+            - name: checkpoint
+              mountPath: /etc/gpu-manager/checkpoint
             - name: run-dir
               mountPath: /var/run
               readOnly: true
@@ -85,6 +87,10 @@ spec:
           hostPath:
             type: DirectoryOrCreate
             path: /etc/gpu-manager/log
+        - name: checkpoint
+          hostPath:
+            type: DirectoryOrCreate
+            path: /etc/gpu-manager/checkpoint
         # We have to mount the whole /var/run directory into container, because of bind mount docker.sock
         # inode change after host docker is restarted
         - name: run-dir
