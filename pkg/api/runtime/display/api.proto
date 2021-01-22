@@ -55,6 +55,7 @@ message DeviceInfo {
   float gpu = 10;
   float mem = 11;
   repeated int32 pids = 12;
+  float device_mem = 13;
 }
 
 message VersionResponse {
