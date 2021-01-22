@@ -93,7 +93,7 @@ func (disp *Display) PrintUsages(context.Context, *google_protobuf1.Empty) (*dis
 				Project: pod.Namespace,
 				User:    getUserName(pod),
 				Stat:    podUsage,
-				Spec:    disp.getPodSpec(pod),
+				Spec:    disp.getPodSpec(pod, podUsage),
 			}
 		}
 	}
@@ -105,17 +105,30 @@ func (disp *Display) PrintUsages(context.Context, *google_protobuf1.Empty) (*dis
 	return &displayapi.UsageResponse{}, nil
 }
 
-func (disp *Display) getPodSpec(pod *v1.Pod) map[string]*displayapi.Spec {
+func (disp *Display) getPodSpec(pod *v1.Pod, devicesInfo map[string]*displayapi.Devices) map[string]*displayapi.Spec {
 	podSpec := make(map[string]*displayapi.Spec)
 
 	for _, ctnt := range pod.Spec.Containers {
 		vcore := ctnt.Resources.Requests[types.VCoreAnnotation]
 		vmemory := ctnt.Resources.Requests[types.VMemoryAnnotation]
 		memBytes := vmemory.Value() * types.MemoryBlockSize
-		podSpec[ctnt.Name] = &displayapi.Spec{
+
+		if memBytes == 0 {
+			var deviceMem int64
+			if dev, ok := devicesInfo[ctnt.Name]; ok {
+				for _, dev := range dev.Dev {
+					deviceMem += int64(dev.DeviceMem)
+				}
+			}
+			memBytes = deviceMem
+		}
+
+		spec := &displayapi.Spec{
 			Gpu: float32(vcore.Value()) / 100,
 			Mem: float32(memBytes >> 20),
 		}
+
+		podSpec[ctnt.Name] = spec
 	}
 
 	return podSpec
@@ -149,6 +162,7 @@ func (disp *Display) getPodUsage(pod *v1.Pod) map[string]*displayapi.Devices {
 			if utils.IsValidGPUPath(deviceName) {
 				node := disp.tree.Query(deviceName)
 				if usage := disp.getDeviceUsage(pidsInContainer, node.Meta.ID); usage != nil {
+					usage.DeviceMem = float32(node.Meta.TotalMemory >> 20)
 					devicesUsage = append(devicesUsage, usage)
 				}
 			}
@@ -317,7 +331,7 @@ func (disp *Display) Collect(ch chan<- prometheus.Metric) {
 		valueLabels[metricNodeName] = pod.Spec.NodeName
 
 		podUsage := disp.getPodUsage(pod)
-		podSpec := disp.getPodSpec(pod)
+		podSpec := disp.getPodSpec(pod, podUsage)
 		// Usage of container
 		for contName, devicesStat := range podUsage {
 			valueLabels[metricContainerName] = contName
