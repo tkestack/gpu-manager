@@ -36,7 +36,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog"
 )
@@ -122,12 +122,38 @@ func WaitForServer(socket string) error {
 
 func GetCheckpointData(devicePluginPath string) (*types.Checkpoint, error) {
 	cpFile := filepath.Join(devicePluginPath, types.CheckPointFileName)
-	cpV2Data := &types.CheckpointData{}
 	data, err := ioutil.ReadFile(cpFile)
 	if err != nil {
 		return nil, err
 	}
+	klog.V(4).Infof("Try NUMA checkpoint data format")
+	cpNUMAData := &types.CheckpointDataNUMA{}
+	err = json.Unmarshal(data, cpNUMAData)
+	if err != nil {
+		klog.V(4).Infof("Failed NUMA checkpoint data format")
+	} else { // flat deviceids
+		v2DeivcesEntryies := make([]types.PodDevicesEntry, len(cpNUMAData.Data.PodDeviceEntries))
+		for i, v := range cpNUMAData.Data.PodDeviceEntries {
+			v2PodDevicesEntry := types.PodDevicesEntry{
+				PodUID:        v.PodUID,
+				ContainerName: v.ContainerName,
+				ResourceName:  v.ResourceName,
+				DeviceIDs:     make([]string, 0),
+				AllocResp:     v.AllocResp,
+			}
+			for _, devices := range v.DeviceIDs {
+				v2PodDevicesEntry.DeviceIDs = append(v2PodDevicesEntry.DeviceIDs, devices...)
+			}
+			v2DeivcesEntryies[i] = v2PodDevicesEntry
+		}
+		cpV1Data := &types.Checkpoint{}
+		cpV1Data.RegisteredDevices = cpNUMAData.Data.RegisteredDevices
+		cpV1Data.PodDeviceEntries = v2DeivcesEntryies
+		return cpV1Data, nil
+	}
+
 	klog.V(4).Infof("Try v2 checkpoint data format")
+	cpV2Data := &types.CheckpointData{}
 	err = json.Unmarshal(data, cpV2Data)
 	if err != nil {
 		return nil, err
