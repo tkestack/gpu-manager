@@ -57,8 +57,7 @@ kubectl label node <node> nvidia-device-enable=enable
 
 There is nothing special to submit a Pod except the description of GPU resource is no longer 1
 . The GPU
-resources are described as that 100 `tencent.com/vcuda-core` for 1 GPU and N `tencent.com/vcuda
--memory` for GPU memory (1 tencent.com/vcuda-memory means 256Mi
+resources are described as that 100 `tencent.com/vcuda-core` for 1 GPU and N `tencent.com/vcuda-memory` for GPU memory (1 tencent.com/vcuda-memory means 256Mi
 GPU memory). And because of the limitation of extend resource validation of Kubernetes, to support
 GPU utilization limitation, you should add `tencent.com/vcuda-core-limit: XX` in the annotation
  field of a Pod.
