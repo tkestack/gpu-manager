@@ -144,7 +144,10 @@ func readProcsFile(file string) ([]int, error) {
 }
 
 func (m *containerRuntimeManager) getCgroupName(pod *v1.Pod, containerID string) (string, error) {
-	podQos := qos.GetPodQOS(pod)
+	podQos := pod.Status.QOSClass
+	if len(podQos) == 0 {
+		podQos = qos.GetPodQOS(pod)
+	}
 
 	var parentContainer cgroup.CgroupName
 	switch podQos {
