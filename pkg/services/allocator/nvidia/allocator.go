@@ -226,10 +226,15 @@ func (ta *NvidiaTopoAllocator) recoverInUsed() {
 				continue
 			}
 
-			devices := jsonData.HostConfig.Devices
-			if devices == nil {
+			deviceMappings := jsonData.HostConfig.Devices
+			if deviceMappings == nil {
 				glog.V(2).Infof("%s No devices", baseJSON.ID)
 				continue
+			}
+
+			devices := make([]string, 0)
+			for _, dev := range deviceMappings {
+				devices = append(devices, dev.PathOnHost)
 			}
 
 			_, found := allRunningPods[pUID]
@@ -239,29 +244,41 @@ func (ta *NvidiaTopoAllocator) recoverInUsed() {
 				continue
 			}
 
+			var (
+				info       *cache.Info
+				foundCache bool
+			)
+
 			if cacheItem := ta.allocatedPod.GetCache(pUID); cacheItem != nil {
-				info, ok := cacheItem[cName]
-				if ok {
+				info, foundCache = cacheItem[cName]
+				if foundCache {
 					glog.V(2).Infof("%s(%s) has allocated device %+v", pUID, baseJSON.ID, info.Devices)
-					continue
 				}
 			}
 
-			gpuUtil, gpuMemory, _ := utils.GetGPUData(jsonData.Config.Labels)
 			recoverDevices := sets.NewString()
+			gpuUtil, gpuMemory, _ := utils.GetGPUData(jsonData.Config.Labels)
+
+			if foundCache {
+				glog.V(2).Infof("Use cached data for %s(%s)", pUID, baseJSON.ID)
+
+				gpuUtil = info.Cores
+				gpuMemory = info.Memory
+				devices = info.Devices
+			}
 
 			for _, dev := range devices {
-				if utils.IsValidGPUPath(dev.PathOnHost) {
-					glog.V(2).Infof("Nvidia GPU %q is in use by Docker Container: %q", dev.PathOnHost, jsonData.ID)
+				if utils.IsValidGPUPath(dev) {
+					glog.V(2).Infof("Nvidia GPU %q is in use by Docker Container: %q", dev, jsonData.ID)
 					glog.V(2).Infof("Uid: %s, Name: %s, util: %d, memory: %d", pUID, cName, gpuUtil, gpuMemory)
 
-					id, _ := utils.GetGPUMinorID(dev.PathOnHost)
+					id, _ := utils.GetGPUMinorID(dev)
 					ta.tree.MarkOccupied(&nvtree.NvidiaNode{
 						Meta: nvtree.DeviceMeta{
 							MinorID: id,
 						},
 					}, gpuUtil, gpuMemory)
-					recoverDevices.Insert(dev.PathOnHost)
+					recoverDevices.Insert(dev)
 					if gpuUtil >= nvtree.HundredCore {
 						usageMapData[id] += nvtree.HundredCore
 					} else {
