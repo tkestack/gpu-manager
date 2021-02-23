@@ -71,7 +71,7 @@ func NewDisplay(config *config.Config, tree device.GPUTree) *Display {
 	dockerClient := utils.CreateDockerClient(config.DockerEndpoint)
 	info, err := dockerClient.Info()
 	if err != nil {
-		glog.Fatalf("Cant't get docker info: %v", err)
+		glog.Fatalf("Can't get docker info: %v", err)
 	}
 	return &Display{
 		tree:         _tree,

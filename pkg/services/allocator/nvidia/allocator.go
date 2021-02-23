@@ -244,6 +244,11 @@ func (ta *NvidiaTopoAllocator) recoverInUsed() {
 				continue
 			}
 
+			if !jsonData.State.Running {
+				glog.V(2).Infof("%s(%s) is not running", pUID, baseJSON.ID)
+				continue
+			}
+
 			var (
 				info       *cache.Info
 				foundCache bool
@@ -307,7 +312,7 @@ func (ta *NvidiaTopoAllocator) recoverInUsed() {
 }
 
 func (ta *NvidiaTopoAllocator) checkAllocation() {
-	glog.V(4).Infof("Chekcing allocation of pods on this node")
+	glog.V(4).Infof("Checking allocation of pods on this node")
 	pods, err := getPodsOnNode(ta.k8sClient, ta.config.Hostname, "")
 	if err != nil {
 		glog.Infof("Failed to get pods on node due to %v", err)

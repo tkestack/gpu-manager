@@ -228,7 +228,7 @@ func (m *managerImpl) setupMetricsService(mux *http.ServeMux) {
 
 	r.MustRegister(m.displayer)
 
-	mux.Handle("/metric", promhttp.HandlerFor(r, promhttp.HandlerOpts{ErrorHandling: promhttp.ContinueOnError}))
+	mux.HandleFunc("/metric", promhttp.HandlerFor(r, promhttp.HandlerOpts{ErrorHandling: promhttp.ContinueOnError}).ServeHTTP)
 }
 
 func (m *managerImpl) runServer() error {
