@@ -44,9 +44,9 @@ GPU4     SOC     SOC     SOC     SOC      X      PIX
 GPU5     SOC     SOC     SOC     SOC     PIX      X
 `
 	tree.Init(testCase1)
-	for _, n := range tree.Leaves() {
+	for idx, n := range tree.Leaves() {
 		n.AllocatableMeta.Cores = HundredCore
-		n.AllocatableMeta.Memory = 1024
+		n.AllocatableMeta.Memory = 1024 - int64(idx)
 	}
 
 	//test sort
@@ -57,8 +57,8 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 		less: []LessFunc{ByAllocatableCores,
 			ByAvailable,
 			ByType,
-			ByID,
 			ByAllocatableMemory,
+			ByID,
 			ByPids,
 			ByMemory},
 	}

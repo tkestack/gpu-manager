@@ -19,6 +19,8 @@ package nvidia
 
 import (
 	"sort"
+
+	"tkestack.io/gpu-manager/pkg/types"
 )
 
 //LessFunc represents funcion to compare two NvidiaNode
@@ -57,7 +59,7 @@ var (
 
 	//ByAllocatableMemory compares two NvidiaNode by available memory
 	ByAllocatableMemory = func(p1, p2 *NvidiaNode) bool {
-		return p1.AllocatableMeta.Memory < p2.AllocatableMeta.Memory
+		return p1.AllocatableMeta.Memory/types.MemoryBlockSize < p2.AllocatableMeta.Memory/types.MemoryBlockSize
 	}
 
 	//PrintSorter is used to sort nodes when printing them out
