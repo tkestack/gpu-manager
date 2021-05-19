@@ -15,38 +15,61 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package main
+ package main
 
-import (
-	goflag "flag"
-	"fmt"
-	"os"
-
-	"k8s.io/klog"
-
-	"tkestack.io/gpu-manager/cmd/manager/app"
-	"tkestack.io/gpu-manager/cmd/manager/options"
-	"tkestack.io/gpu-manager/pkg/flags"
-	"tkestack.io/gpu-manager/pkg/logs"
-	"tkestack.io/gpu-manager/pkg/version"
-
-	"github.com/spf13/pflag"
-)
-
-func main() {
-	klog.InitFlags(nil)
-	opt := options.NewOptions()
-	opt.AddFlags(pflag.CommandLine)
-
-	flags.InitFlags()
-	goflag.CommandLine.Parse([]string{})
-	logs.InitLogs()
-	defer logs.FlushLogs()
-
-	version.PrintAndExitIfRequested()
-
-	if err := app.Run(opt); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-}
+ import (
+	 goflag "flag"
+	 "fmt"
+	 "os"
+ 
+	 "k8s.io/klog"
+ 
+	 "tkestack.io/gpu-manager/cmd/manager/app"
+	 "tkestack.io/gpu-manager/cmd/manager/options"
+	 "tkestack.io/gpu-manager/pkg/flags"
+	 "tkestack.io/gpu-manager/pkg/logs"
+	 "tkestack.io/gpu-manager/pkg/version"
+ 
+	 "tkestack.io/nvml"
+	 "time"
+ 
+	 "github.com/spf13/pflag"
+ )
+ 
+ func main() {
+ 
+	 // defer func(){
+	 // 	klog.Errorf("gpu error")
+	 // 	os.Exit(3)        
+	 // }()
+	 // if err := nvml.Init(); err != nil {
+			 
+	 // }
+	 // defer nvml.Shutdown()
+	 
+	 for {
+		 fmt.Println("休眠两秒\n")
+		 time.Sleep(time.Duration(2)*time.Second)
+		 err := nvml.Init()
+		 if err == nil {
+			 break
+		 }
+	 }
+ 
+	 klog.InitFlags(nil)
+	 opt := options.NewOptions()
+	 opt.AddFlags(pflag.CommandLine)
+ 
+	 flags.InitFlags()
+	 goflag.CommandLine.Parse([]string{})
+	 logs.InitLogs()
+	 defer logs.FlushLogs()
+ 
+	 version.PrintAndExitIfRequested()
+ 
+	 if err := app.Run(opt); err != nil {
+		 fmt.Fprintf(os.Stderr, "%v\n", err)
+		 os.Exit(1)
+	 }
+ }
+ 
