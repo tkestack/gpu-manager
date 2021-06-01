@@ -35,6 +35,10 @@ make
 make img
 ```
 
+## Prebuilt image
+
+Prebuilt image can be found at `thomassong/gpu-manager`
+
 ## Deploy
 
 GPU Manager is running as daemonset, and because of the RABC restriction and hydrid cluster,
@@ -51,6 +55,12 @@ kubectl create clusterrolebinding gpu-manager-role --clusterrole=cluster-admin -
 
 ```
 kubectl label node <node> nvidia-device-enable=enable
+```
+
+- submit daemonset yaml
+
+```
+kubectl create -f gpu-manager.yaml
 ```
 
 ## Pod template example
