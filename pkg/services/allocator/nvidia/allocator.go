@@ -357,8 +357,6 @@ func (ta *NvidiaTopoAllocator) allocateOne(pod *v1.Pod, container *v1.Container,
 		return nil, nil
 	}
 
-	ta.recycle()
-
 	needMemory := needMemoryBlocks * types.MemoryBlockSize
 	ta.tree.Update()
 	shareMode := false
