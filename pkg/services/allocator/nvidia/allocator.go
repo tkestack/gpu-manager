@@ -357,8 +357,6 @@ func (ta *NvidiaTopoAllocator) allocateOne(pod *v1.Pod, container *v1.Container,
 		return nil, nil
 	}
 
-	ta.recycle()
-
 	needMemory := needMemoryBlocks * types.MemoryBlockSize
 	ta.tree.Update()
 	shareMode := false
@@ -635,6 +633,10 @@ func (ta *NvidiaTopoAllocator) freeGPU(podUids []string) {
 			}
 		}
 		ta.allocatedPod.Delete(uid)
+		if ta.unfinishedPod != nil && uid == string(ta.unfinishedPod.UID) {
+			klog.V(2).Infof("unfinished pod %s was deleted, update cached reference to nil", uid)
+			ta.unfinishedPod = nil
+		}
 	}
 	ta.writeCheckpoint()
 }
@@ -661,6 +663,8 @@ func (ta *NvidiaTopoAllocator) Allocate(_ context.Context, reqs *pluginapi.Alloc
 	reqCount = uint(len(req.DevicesIDs))
 
 	klog.V(4).Infof("Request GPU device: %s", strings.Join(req.DevicesIDs, ","))
+
+	ta.recycle()
 
 	if ta.unfinishedPod != nil {
 		candidatePod = ta.unfinishedPod
