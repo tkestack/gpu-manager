@@ -53,6 +53,7 @@ type Options struct {
 	ContainerRuntimeEndpoint string
 	CgroupDriver             string
 	RequestTimeout           time.Duration
+	WaitTimeout              time.Duration
 }
 
 // NewOptions gives a default options template.
@@ -68,6 +69,7 @@ func NewOptions() *Options {
 		ContainerRuntimeEndpoint: DefaultContainerRuntimeEndpoint,
 		CgroupDriver:             DefaultCgroupDriver,
 		RequestTimeout:           time.Second * 5,
+		WaitTimeout:              time.Minute,
 	}
 }
 
@@ -92,4 +94,5 @@ func (opt *Options) AddFlags(fs *pflag.FlagSet) {
 		"Possible values: 'cgroupfs', 'systemd'")
 	fs.DurationVar(&opt.RequestTimeout, "runtime-request-timeout", opt.RequestTimeout,
 		"request timeout for communicating with container runtime endpoint")
+	fs.DurationVar(&opt.WaitTimeout, "wait-timeout", opt.WaitTimeout, "wait timeout for resource server ready")
 }

@@ -82,17 +82,18 @@ func Run(opt *options.Options) error {
 	srv := server.NewManager(cfg)
 	go srv.Run()
 
-	retries := 0
-	for !srv.Ready() && retries < 10 {
-		klog.Infof("Wait for internal server ready")
+	waitTimer := time.NewTimer(opt.WaitTimeout)
+	for !srv.Ready() {
+		select {
+		case <-waitTimer.C:
+			klog.Warningf("Wait too long for server ready, restarting")
+			os.Exit(1)
+		default:
+			klog.Infof("Wait for internal server ready")
+		}
 		time.Sleep(time.Second)
-		retries++
 	}
-
-	if retries == 10 {
-		klog.Warningf("Wait too long for server ready, restarting")
-		os.Exit(1)
-	}
+	waitTimer.Stop()
 
 	if err := srv.RegisterToKubelet(); err != nil {
 		return err
