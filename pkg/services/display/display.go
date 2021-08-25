@@ -113,6 +113,11 @@ func (disp *Display) getPodSpec(pod *v1.Pod, devicesInfo map[string]*displayapi.
 		vmemory := ctnt.Resources.Requests[types.VMemoryAnnotation]
 		memBytes := vmemory.Value() * types.MemoryBlockSize
 
+		spec := &displayapi.Spec{
+			Gpu: float32(vcore.Value()) / 100,
+			Mem: float32(memBytes >> 20),
+		}
+
 		if memBytes == 0 {
 			var deviceMem int64
 			if dev, ok := devicesInfo[ctnt.Name]; ok {
@@ -120,12 +125,7 @@ func (disp *Display) getPodSpec(pod *v1.Pod, devicesInfo map[string]*displayapi.
 					deviceMem += int64(dev.DeviceMem)
 				}
 			}
-			memBytes = deviceMem
-		}
-
-		spec := &displayapi.Spec{
-			Gpu: float32(vcore.Value()) / 100,
-			Mem: float32(memBytes >> 20),
+			spec.Mem = float32(deviceMem)
 		}
 
 		podSpec[ctnt.Name] = spec
