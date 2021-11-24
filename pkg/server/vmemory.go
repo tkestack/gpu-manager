@@ -24,9 +24,10 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"k8s.io/klog"
 	"google.golang.org/grpc"
+	"k8s.io/klog"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+
 	"tkestack.io/gpu-manager/pkg/types"
 )
 

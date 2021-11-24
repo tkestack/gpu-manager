@@ -24,12 +24,14 @@ import (
 
 	"tkestack.io/gpu-manager/pkg/config"
 	"tkestack.io/gpu-manager/pkg/device"
+	"tkestack.io/gpu-manager/pkg/services/response"
+
 	// Register test allocator controller
 	_ "tkestack.io/gpu-manager/pkg/device/dummy"
 	"tkestack.io/gpu-manager/pkg/services/allocator"
 
-	"k8s.io/klog"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -44,7 +46,7 @@ type DummyAllocator struct {
 var _ allocator.GPUTopoService = &DummyAllocator{}
 
 //NewDummyAllocator returns a new DummyAllocator
-func NewDummyAllocator(_ *config.Config, _ device.GPUTree, _ kubernetes.Interface) allocator.GPUTopoService {
+func NewDummyAllocator(_ *config.Config, _ device.GPUTree, _ kubernetes.Interface, _ response.Manager) allocator.GPUTopoService {
 	return &DummyAllocator{}
 }
 

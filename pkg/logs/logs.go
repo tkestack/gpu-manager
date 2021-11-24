@@ -21,8 +21,8 @@ import (
 	"log"
 	"time"
 
-	"k8s.io/klog"
 	"google.golang.org/grpc/grpclog"
+	"k8s.io/klog"
 )
 
 // klogWriter serves as a bridge between the standard log package and the klog package.

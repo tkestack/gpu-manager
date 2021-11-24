@@ -35,6 +35,8 @@ import (
 	deviceFactory "tkestack.io/gpu-manager/pkg/device"
 	containerRuntime "tkestack.io/gpu-manager/pkg/runtime"
 	allocFactory "tkestack.io/gpu-manager/pkg/services/allocator"
+	"tkestack.io/gpu-manager/pkg/services/response"
+
 	// Register allocator controller
 	_ "tkestack.io/gpu-manager/pkg/services/allocator/register"
 	"tkestack.io/gpu-manager/pkg/services/display"
@@ -162,7 +164,14 @@ func (m *managerImpl) Run() error {
 		return err
 	}
 
-	m.virtualManager = vitrual_manager.NewVirtualManager(m.config, containerRuntimeManager)
+	klog.V(2).Infof("Load container response data")
+	responseManager := response.NewResponseManager()
+	if err := responseManager.LoadFromFile(m.config.DevicePluginPath); err != nil {
+		klog.Errorf("can't load container response data, %+#v", err)
+		return err
+	}
+
+	m.virtualManager = vitrual_manager.NewVirtualManager(m.config, containerRuntimeManager, responseManager)
 	m.virtualManager.Run()
 
 	treeInitFn := deviceFactory.NewFuncForName(m.config.Driver)
@@ -176,7 +185,7 @@ func (m *managerImpl) Run() error {
 		return fmt.Errorf("can not find allocator for %s", m.config.Driver)
 	}
 
-	m.allocator = initAllocator(m.config, tree, client)
+	m.allocator = initAllocator(m.config, tree, client, responseManager)
 	m.displayer = display.NewDisplay(m.config, tree, containerRuntimeManager)
 
 	klog.V(2).Infof("Starting the GRPC server, driver %s, queryPort %d", m.config.Driver, m.config.QueryPort)
