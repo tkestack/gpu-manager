@@ -17,6 +17,10 @@
 
 package types
 
+import (
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+)
+
 const (
 	VDeviceAnnotation       = "tencent.com/vcuda-device"
 	VCoreAnnotation         = "tencent.com/vcuda-core"
@@ -57,9 +61,9 @@ const (
 )
 
 type VCudaRequest struct {
-	PodUID string
-	//Deprecated
-	ContainerName string
+	PodUID           string
+	AllocateResponse *pluginapi.ContainerAllocateResponse
+	ContainerName    string
 	//Deprecated
 	Cores int64
 	//Deprecated

@@ -28,6 +28,7 @@ import (
 	"tkestack.io/gpu-manager/pkg/config"
 	"tkestack.io/gpu-manager/pkg/device/nvidia"
 	"tkestack.io/gpu-manager/pkg/services/allocator/cache"
+	"tkestack.io/gpu-manager/pkg/services/response"
 	"tkestack.io/gpu-manager/pkg/services/watchdog"
 	"tkestack.io/gpu-manager/pkg/types"
 	"tkestack.io/gpu-manager/pkg/utils"
@@ -607,6 +608,109 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 	}
 }
 
+func TestResponseManager(t *testing.T) {
+	flag.Parse()
+	//init tree
+	obj := nvidia.NewNvidiaTree(nil)
+	tree, _ := obj.(*nvidia.NvidiaTree)
+
+	expectObj := nvidia.NewNvidiaTree(nil)
+	expectTree, _ := expectObj.(*nvidia.NvidiaTree)
+
+	testCase1 :=
+		`    GPU0    GPU1    GPU2    GPU3    GPU4    GPU5
+GPU0      X      PIX     PHB     PHB     SOC     SOC
+GPU1     PIX      X      PHB     PHB     SOC     SOC
+GPU2     PHB     PHB      X      PIX     SOC     SOC
+GPU3     PHB     PHB     PIX      X      SOC     SOC
+GPU4     SOC     SOC     SOC     SOC      X      PIX
+GPU5     SOC     SOC     SOC     SOC     PIX      X
+`
+	tree.Init(testCase1)
+	for _, n := range tree.Leaves() {
+		n.AllocatableMeta.Cores = nvidia.HundredCore
+		n.AllocatableMeta.Memory = 1024 * 1024 * 1024
+		n.Meta.TotalMemory = 1024 * 1024 * 1024
+	}
+
+	//build expect tree
+	expectTree.Init(testCase1)
+	for _, n := range expectTree.Leaves() {
+		n.AllocatableMeta.Cores = nvidia.HundredCore
+		n.AllocatableMeta.Memory = 1024 * 1024 * 1024
+		n.Meta.TotalMemory = 1024 * 1024 * 1024
+	}
+	for i := 0; i < 6; i++ {
+		node := expectTree.Query("/dev/nvidia" + strconv.Itoa(i))
+		expectTree.MarkOccupied(node, 100, 1*types.MemoryBlockSize)
+	}
+	t.Logf("expectTree graph: %s", expectTree.PrintGraph())
+
+	//init allocator k8sclient and watchdog
+	k8sClient := fake.NewSimpleClientset()
+	watchdog.NewPodCacheForTest(k8sClient)
+	alloc := initAllocator(tree, k8sClient)
+	alloc.initEvaluator(tree)
+
+	//create and allocate pod1
+	raw1 := podRawInfo{
+		Name: "pod-1",
+		UID:  "uid-1",
+		Containers: []containerRawInfo{
+			{
+				Name:             "container-0",
+				Cores:            600,
+				Memory:           3,
+				PredicateIndexes: "0,1,2,3,4,5",
+			},
+			{
+				Name: "container-without-gpu",
+			},
+		},
+	}
+	resps, err := createAndAllocate(alloc, k8sClient, raw1)
+	if err != nil {
+		t.Errorf("Failed to allocate for pod %s due to %+v", raw1.Name, err)
+	}
+	t.Logf("resp: %+v", resps)
+	t.Logf("tree graph after pod1: %s", tree.PrintGraph())
+
+	if len(resps.ContainerResponses) != 1 {
+		t.Errorf("expect only 1 container response, get %d", len(resps.ContainerResponses))
+	}
+
+	resp := resps.ContainerResponses[0]
+	ctrlPath := utils.GetVirtualControllerMountPath(resp)
+	if ctrlPath == "" {
+		t.Errorf("controller path should not be empty")
+	}
+
+	expectedResp := alloc.responseManager.GetResp(raw1.UID, raw1.Containers[1].Name)
+	if expectedResp != nil {
+		t.Errorf("expected not found target response")
+	}
+
+	expectedResp = alloc.responseManager.GetResp(raw1.UID, raw1.Containers[0].Name)
+	if expectedResp == nil {
+		t.Errorf("expected found target response")
+	}
+
+	expectedCtrlPath := utils.GetVirtualControllerMountPath(expectedResp)
+	if ctrlPath != expectedCtrlPath {
+		t.Errorf("expected controller path to be %s, got %s,", ctrlPath, expectedCtrlPath)
+	}
+
+	k8sClient.CoreV1().Pods("test-ns").Delete(raw1.Name, &metav1.DeleteOptions{})
+	time.Sleep(1 * time.Second)
+
+	alloc.recycle()
+
+	expectedResp = alloc.responseManager.GetResp(raw1.UID, raw1.Containers[0].Name)
+	if expectedResp != nil {
+		t.Errorf("expected not found target response")
+	}
+}
+
 func createAndAllocate(alloc *NvidiaTopoAllocator, client kubernetes.Interface, raw podRawInfo) (*pluginapi.AllocateResponse, error) {
 	var pod *v1.Pod
 	pod, _ = client.CoreV1().Pods("test-ns").Get(raw.Name, metav1.GetOptions{})
@@ -621,6 +725,7 @@ func createAndAllocate(alloc *NvidiaTopoAllocator, client kubernetes.Interface, 
 		vmemory := c.Resources.Limits[types.VMemoryAnnotation]
 
 		req := prepareContainerAllocateRequest(int(vcore.Value()), int(vmemory.Value()))
+		alloc.recycle()
 		resp, err := alloc.allocateOne(pod, &c, &req)
 		if err != nil {
 			pod.Status.Phase = v1.PodFailed
@@ -629,7 +734,9 @@ func createAndAllocate(alloc *NvidiaTopoAllocator, client kubernetes.Interface, 
 			_, _ = client.CoreV1().Pods("test-ns").UpdateStatus(pod)
 			return resps, err
 		}
-		resps.ContainerResponses = append(resps.ContainerResponses, resp)
+		if resp != nil {
+			resps.ContainerResponses = append(resps.ContainerResponses, resp)
+		}
 	}
 	pod.Status.Phase = v1.PodRunning
 	_, _ = client.CoreV1().Pods("test-ns").UpdateStatus(pod)
@@ -752,6 +859,6 @@ func initAllocator(tree *nvidia.NvidiaTree, client kubernetes.Interface) *Nvidia
 		}
 	}(cfg)
 
-	alloc := NewNvidiaTopoAllocatorForTest(cfg, tree, client)
+	alloc := NewNvidiaTopoAllocatorForTest(cfg, tree, client, response.NewFakeResponseManager())
 	return alloc.(*NvidiaTopoAllocator)
 }

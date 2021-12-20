@@ -49,10 +49,10 @@ var (
 func NewPodCache(client kubernetes.Interface, hostName string) {
 	podCache = new(PodCache)
 
-	factory := informers.NewSharedInformerFactoryWithOptions(client, time.Minute, informers.WithTweakListOptions(func(options *metav1.
-	ListOptions) {
-		options.FieldSelector = fields.OneTermEqualSelector(podHostField, hostName).String()
-	}))
+	factory := informers.NewSharedInformerFactoryWithOptions(client, time.Minute,
+		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+			options.FieldSelector = fields.OneTermEqualSelector(podHostField, hostName).String()
+		}))
 	podCache.podInformer = factory.Core().V1().Pods()
 
 	ch := make(chan struct{})

@@ -37,6 +37,7 @@ import (
 	"tkestack.io/gpu-manager/pkg/device/nvidia"
 	"tkestack.io/gpu-manager/pkg/runtime"
 	allocFactory "tkestack.io/gpu-manager/pkg/services/allocator"
+	"tkestack.io/gpu-manager/pkg/services/response"
 	virtual_manager "tkestack.io/gpu-manager/pkg/services/virtual-manager"
 	"tkestack.io/gpu-manager/pkg/services/watchdog"
 	"tkestack.io/gpu-manager/pkg/types"
@@ -158,7 +159,7 @@ func TestServer(t *testing.T) {
 	// init manager
 	srv, _ := NewManager(cfg).(*managerImpl)
 	fakeRuntimeManager := runtime.NewContainerRuntimeManagerStub()
-	srv.virtualManager = virtual_manager.NewVirtualManagerForTest(cfg, fakeRuntimeManager)
+	srv.virtualManager = virtual_manager.NewVirtualManagerForTest(cfg, fakeRuntimeManager, response.NewFakeResponseManager())
 	srv.virtualManager.Run()
 	defer stopServer(srv)
 
@@ -185,7 +186,7 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 	k8sClient := fake.NewSimpleClientset()
 	watchdog.NewPodCacheForTest(k8sClient)
 	initAllocator := allocFactory.NewFuncForName(cfg.Driver + "_test")
-	srv.allocator = initAllocator(cfg, tree, k8sClient)
+	srv.allocator = initAllocator(cfg, tree, k8sClient, response.NewFakeResponseManager())
 	srv.setupGRPCService()
 	srv.RegisterToKubelet()
 	for _, rs := range srv.bundleServer {

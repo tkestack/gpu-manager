@@ -36,6 +36,7 @@ import (
 	"tkestack.io/gpu-manager/pkg/services/allocator"
 	"tkestack.io/gpu-manager/pkg/services/allocator/cache"
 	"tkestack.io/gpu-manager/pkg/services/allocator/checkpoint"
+	"tkestack.io/gpu-manager/pkg/services/response"
 	"tkestack.io/gpu-manager/pkg/services/watchdog"
 	"tkestack.io/gpu-manager/pkg/types"
 	"tkestack.io/gpu-manager/pkg/utils"
@@ -78,6 +79,7 @@ type NvidiaTopoAllocator struct {
 	queue             workqueue.RateLimitingInterface
 	stopChan          chan struct{}
 	checkpointManager *checkpoint.Manager
+	responseManager   response.Manager
 }
 
 const (
@@ -100,7 +102,11 @@ var (
 )
 
 //NewNvidiaTopoAllocator returns a new NvidiaTopoAllocator
-func NewNvidiaTopoAllocator(config *config.Config, tree device.GPUTree, k8sClient kubernetes.Interface) allocator.GPUTopoService {
+func NewNvidiaTopoAllocator(config *config.Config,
+	tree device.GPUTree,
+	k8sClient kubernetes.Interface,
+	responseManager response.Manager) allocator.GPUTopoService {
+
 	_tree, _ := tree.(*nvtree.NvidiaTree)
 	cm, err := checkpoint.NewManager(config.CheckpointPath, checkpointFileName)
 	if err != nil {
@@ -115,6 +121,7 @@ func NewNvidiaTopoAllocator(config *config.Config, tree device.GPUTree, k8sClien
 		queue:             workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		stopChan:          make(chan struct{}),
 		checkpointManager: cm,
+		responseManager:   responseManager,
 	}
 
 	// Load kernel module if it's not loaded
@@ -140,7 +147,11 @@ func NewNvidiaTopoAllocator(config *config.Config, tree device.GPUTree, k8sClien
 
 //NewNvidiaTopoAllocatorForTest returns a new NvidiaTopoAllocator
 //with fake docker client, just for testing.
-func NewNvidiaTopoAllocatorForTest(config *config.Config, tree device.GPUTree, k8sClient kubernetes.Interface) allocator.GPUTopoService {
+func NewNvidiaTopoAllocatorForTest(config *config.Config,
+	tree device.GPUTree,
+	k8sClient kubernetes.Interface,
+	responseManager response.Manager) allocator.GPUTopoService {
+
 	_tree, _ := tree.(*nvtree.NvidiaTree)
 	cm, err := checkpoint.NewManager("/tmp", checkpointFileName)
 	if err != nil {
@@ -155,6 +166,7 @@ func NewNvidiaTopoAllocatorForTest(config *config.Config, tree device.GPUTree, k
 		stopChan:          make(chan struct{}),
 		queue:             workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 		checkpointManager: cm,
+		responseManager:   responseManager,
 	}
 
 	// Initialize evaluator
@@ -586,6 +598,9 @@ func (ta *NvidiaTopoAllocator) allocateOne(pod *v1.Pod, container *v1.Container,
 		ta.queue.AddRateLimited(ar)
 		<-ar.resChan
 	}
+
+	ta.responseManager.InsertResp(string(pod.UID), container.Name, ctntResp)
+
 	return ctntResp, nil
 }
 
@@ -631,6 +646,8 @@ func (ta *NvidiaTopoAllocator) freeGPU(podUids []string) {
 					},
 				}, info.Cores, info.Memory)
 			}
+
+			ta.responseManager.DeleteResp(uid, contName)
 		}
 		ta.allocatedPod.Delete(uid)
 		if ta.unfinishedPod != nil && uid == string(ta.unfinishedPod.UID) {
@@ -738,7 +755,9 @@ func (ta *NvidiaTopoAllocator) Allocate(_ context.Context, reqs *pluginapi.Alloc
 			klog.Errorf(err.Error())
 			return nil, err
 		}
-		resps.ContainerResponses = append(resps.ContainerResponses, resp)
+		if resp != nil {
+			resps.ContainerResponses = append(resps.ContainerResponses, resp)
+		}
 	} else {
 		msg := fmt.Sprintf("candidate pod not found for request %v, allocation failed", reqs)
 		klog.Infof(msg)

@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+
 	nvtree "tkestack.io/gpu-manager/pkg/device/nvidia"
 	"tkestack.io/gpu-manager/pkg/types"
 
@@ -339,4 +341,14 @@ func GetContainerIndexByName(pod *v1.Pod, containerName string) (int, error) {
 		return containerIndex, fmt.Errorf("failed to get index of container %s in pod %s", containerName, pod.UID)
 	}
 	return containerIndex, nil
+}
+
+func GetVirtualControllerMountPath(resp *pluginapi.ContainerAllocateResponse) string {
+	for _, mnt := range resp.Mounts {
+		if mnt.ContainerPath == types.VCUDA_MOUNTPOINT {
+			return mnt.HostPath
+		}
+	}
+
+	return ""
 }

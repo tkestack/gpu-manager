@@ -26,9 +26,9 @@ import (
 	"tkestack.io/gpu-manager/pkg/logs"
 	"tkestack.io/gpu-manager/pkg/utils"
 
-	"k8s.io/klog"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
+	"k8s.io/klog"
 )
 
 var (

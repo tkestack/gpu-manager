@@ -20,9 +20,10 @@ package allocator
 import (
 	"tkestack.io/gpu-manager/pkg/config"
 	"tkestack.io/gpu-manager/pkg/device"
+	"tkestack.io/gpu-manager/pkg/services/response"
 
-	"k8s.io/klog"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -33,7 +34,10 @@ type GPUTopoService interface {
 }
 
 //NewFunc represents function for creating new GPUTopoService
-type NewFunc func(cfg *config.Config, tree device.GPUTree, k8sClient kubernetes.Interface) GPUTopoService
+type NewFunc func(cfg *config.Config,
+	tree device.GPUTree,
+	k8sClient kubernetes.Interface,
+	responseManager response.Manager) GPUTopoService
 
 var (
 	factory = make(map[string]NewFunc)
