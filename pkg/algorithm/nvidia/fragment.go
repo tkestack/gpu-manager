@@ -44,7 +44,7 @@ func (al *fragmentMode) Evaluate(cores int64, _ int64) []*nvidia.NvidiaNode {
 	var (
 		candidate = al.tree.Root()
 		next      *nvidia.NvidiaNode
-		sorter    = fragmentSort(nvidia.ByAvailable, nvidia.ByMemory, nvidia.ByPids, nvidia.ByID)
+		sorter    = fragmentSort(nvidia.ByAvailable, nvidia.ByAllocatableMemory, nvidia.ByPids, nvidia.ByMinorID)
 		nodes     = make([]*nvidia.NvidiaNode, 0)
 		num       = int(cores / nvidia.HundredCore)
 	)

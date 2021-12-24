@@ -39,7 +39,7 @@ func NewLinkMode(t *nvidia.NvidiaTree) *linkMode {
 
 func (al *linkMode) Evaluate(cores int64, memory int64) []*nvidia.NvidiaNode {
 	var (
-		sorter   = linkSort(nvidia.ByType, nvidia.ByAvailable, nvidia.ByMemory, nvidia.ByPids, nvidia.ByID)
+		sorter   = linkSort(nvidia.ByType, nvidia.ByAvailable, nvidia.ByAllocatableMemory, nvidia.ByPids, nvidia.ByMinorID)
 		tmpStore = make(map[int]*nvidia.NvidiaNode)
 		root     = al.tree.Root()
 		nodes    = make([]*nvidia.NvidiaNode, 0)

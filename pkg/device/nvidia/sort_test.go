@@ -58,7 +58,7 @@ GPU5     SOC     SOC     SOC     SOC     PIX      X
 			ByAvailable,
 			ByType,
 			ByAllocatableMemory,
-			ByID,
+			ByMinorID,
 			ByPids,
 			ByMemory},
 	}
