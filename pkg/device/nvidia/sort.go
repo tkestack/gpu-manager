@@ -42,6 +42,11 @@ var (
 		return p1.Meta.ID < p2.Meta.ID
 	}
 
+	//ByMinorID compares two NvidiaNode by minor ID
+	ByMinorID = func(p1, p2 *NvidiaNode) bool {
+		return p1.Meta.MinorID < p2.Meta.MinorID
+	}
+
 	//ByMemory compares two NvidiaNode by memory already used
 	ByMemory = func(p1, p2 *NvidiaNode) bool {
 		return p1.Meta.UsedMemory < p2.Meta.UsedMemory
@@ -64,7 +69,7 @@ var (
 
 	//PrintSorter is used to sort nodes when printing them out
 	PrintSorter = &printSort{
-		less: []LessFunc{ByType, ByAvailable, ByID},
+		less: []LessFunc{ByType, ByAvailable, ByMinorID},
 	}
 )
 

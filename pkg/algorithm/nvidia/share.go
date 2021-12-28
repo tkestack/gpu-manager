@@ -44,7 +44,7 @@ func (al *shareMode) Evaluate(cores int64, memory int64) []*nvidia.NvidiaNode {
 	var (
 		nodes    []*nvidia.NvidiaNode
 		tmpStore = make([]*nvidia.NvidiaNode, al.tree.Total())
-		sorter   = shareModeSort(nvidia.ByAllocatableCores, nvidia.ByAllocatableMemory, nvidia.ByPids, nvidia.ByID)
+		sorter   = shareModeSort(nvidia.ByAllocatableCores, nvidia.ByAllocatableMemory, nvidia.ByPids, nvidia.ByMinorID)
 	)
 
 	for i := 0; i < al.tree.Total(); i++ {
