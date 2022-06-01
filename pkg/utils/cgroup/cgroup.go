@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	cgroupsystemd "github.com/opencontainers/runc/libcontainer/cgroups/systemd"
+
+	"k8s.io/klog"
 )
 
 // CgroupName is the abstract name of a cgroup prior to any driver specific conversion.
@@ -65,4 +67,16 @@ func escapeSystemdCgroupName(part string) string {
 
 func (cgroupName CgroupName) ToCgroupfs() string {
 	return "/" + path.Join(cgroupName...)
+}
+
+func SystemdPathPrefixOfRuntime(runtimeName string) string {
+	switch runtimeName {
+	case "cri-o":
+		return "crio"
+	case "containerd":
+		return "cri-containerd"
+	default:
+		klog.Infof("prefix of container runtime %s was not tested. Maybe not correct!", runtimeName)
+		return runtimeName
+	}
 }
