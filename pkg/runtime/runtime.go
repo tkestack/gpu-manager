@@ -164,7 +164,7 @@ func (m *containerRuntimeManager) getCgroupName(pod *v1.Pod, containerID string)
 
 	switch m.cgroupDriver {
 	case "systemd":
-		return fmt.Sprintf("%s/%s-%s.scope", cgroupName.ToSystemd(), m.runtimeName, containerID), nil
+		return fmt.Sprintf("%s/%s-%s.scope", cgroupName.ToSystemd(), cgroup.SystemdPathPrefixOfRuntime(m.runtimeName), containerID), nil
 	case "cgroupfs":
 		return fmt.Sprintf("%s/%s", cgroupName.ToCgroupfs(), containerID), nil
 	default:
