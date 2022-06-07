@@ -20,6 +20,7 @@ package main
 import (
 	"context"
 	goflag "flag"
+	"time"
 
 	vcudaapi "tkestack.io/gpu-manager/pkg/api/runtime/vcuda"
 	"tkestack.io/gpu-manager/pkg/flags"
@@ -34,6 +35,8 @@ import (
 var (
 	addr, busID, podUID, contName, contID string
 )
+
+const TimeOut = 1 * time.Second
 
 func main() {
 	cmdFlags := pflag.CommandLine
@@ -53,14 +56,14 @@ func main() {
 		klog.Fatalf("argument is empty, current: %s", cmdFlags.Args())
 	}
 
-	conn, err := grpc.Dial(addr, utils.DefaultDialOptions...)
+	options := append(utils.DefaultDialOptions, grpc.WithTimeout(TimeOut))
+	conn, err := grpc.Dial(addr, options...)
 	if err != nil {
 		klog.Fatalf("can't dial %s, error %v", addr, err)
 	}
 	defer conn.Close()
 
 	client := vcudaapi.NewVCUDAServiceClient(conn)
-	ctx := context.TODO()
 
 	req := &vcudaapi.VDeviceRequest{
 		BusId:         busID,
@@ -73,6 +76,8 @@ func main() {
 		req.ContainerId = contID
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), TimeOut)
+	defer cancel()
 	_, err = client.RegisterVDevice(ctx, req)
 	if err != nil {
 		klog.Fatalf("fail to get response from manager, error %v", err)
