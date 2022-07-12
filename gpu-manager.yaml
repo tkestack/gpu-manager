@@ -37,7 +37,7 @@ spec:
         nvidia-device-enable: enable
       hostPID: true
       containers:
-        - image: tkestack/gpu-manager:1.0.3
+        - image: tkestack/gpu-manager:v1.0.3
           imagePullPolicy: Always
           name: gpu-manager
           securityContext:
