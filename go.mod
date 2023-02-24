@@ -16,7 +16,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v1.2.1
 	github.com/spf13/pflag v1.0.5
-	golang.org/x/net v0.0.0-20191109021931-daa7c04131f5
+	golang.org/x/net v0.7.0
 	google.golang.org/genproto v0.0.0-20191108220845-16a3f7862a1a
 	google.golang.org/grpc v1.24.0
 	k8s.io/api v0.17.4
