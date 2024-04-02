@@ -1184,6 +1184,7 @@ func getPodsOnNode(client kubernetes.Interface, hostname string, phase string) (
 		podList, err = client.CoreV1().Pods(v1.NamespaceAll).List(metav1.ListOptions{
 			FieldSelector: selector.String(),
 			LabelSelector: labels.Everything().String(),
+			ResourceVersion: "0",
 		})
 		if err != nil {
 			return false, err
