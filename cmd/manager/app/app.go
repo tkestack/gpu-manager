@@ -80,7 +80,12 @@ func Run(opt *options.Options) error {
 	}
 
 	srv := server.NewManager(cfg)
-	go srv.Run()
+	go func() {
+		err := srv.Run()
+		if err != nil {
+			klog.Fatalf("error occurred when srv Run, err: %+v", err)
+		}
+	}()
 
 	waitTimer := time.NewTimer(opt.WaitTimeout)
 	for !srv.Ready() {
